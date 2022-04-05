@@ -1,0 +1,9 @@
+/*
+**__pycache__
+!pyrception
+/pyrception/**.png
+/pyrception/**.pdf
+!.gitignore
+!LICENCE.md
+!README.md
+!setup.py
