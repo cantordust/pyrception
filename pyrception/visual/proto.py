@@ -312,6 +312,7 @@ class ProtoLayer:
 
             dim.H = scaled_height
             dim.W = scaled_width
+            dim.shape = (dim.H, dim.W, dim.D)
             dim.span = dim.H * dim.W * dim.D
             dim.resize = True
 

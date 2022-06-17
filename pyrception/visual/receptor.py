@@ -142,7 +142,7 @@ class ReceptorLayer(ProtoLayer):
         #     size=(st_size, st_size),
         # ).to_sparse_csr()
 
-    def get_local_mean(
+    def get_rf_input(
         self,
         frame: pt.Tensor,
     ) -> pt.Tensor:
@@ -161,11 +161,7 @@ class ReceptorLayer(ProtoLayer):
                 A map of the local mean illumination at each pixel.
         """
 
-        # print(f"==[ padded:\n{padded}")
         stretched = self.stretch(frame)
-        # print(f"==[ stretched:")
-        # plt.imshow(stretched, cmap="gray")
-        # print(f"==[ stretched:\n{stretched}")
 
         mean = pt.mm(self.rf, stretched)
 
@@ -176,7 +172,7 @@ class ReceptorLayer(ProtoLayer):
     def process(
         self,
         frame: pt.Tensor,
-        saccades: Optional[Tuple[float, float]] = None,
+        offset: Optional[Tuple[float, float]] = None,
     ) -> pt.Tensor:
         """
         Read the input by applying a certain offset:
@@ -192,19 +188,21 @@ class ReceptorLayer(ProtoLayer):
         if self.flatmask is not None:
             frame *= self.flatmask
 
-        if saccades is not None:
-            padding = self.get_padding(saccades[0], saccades[1])
+        if offset is not None:
+            padding = self.get_padding(offset[0], offset[1])
             padded = self.pad(frame, padding)
 
         else:
             padded = frame
 
-        mean = self.get_local_mean(padded)
+        mean = self.get_rf_input(padded)
 
-        if saccades is not None:
+        if offset is not None:
             mean = self.unpad(mean, padding)
 
         views[View.ReceptorMean] = mean
+
+        print(f"==[ mean shape : {mean.shape}")
 
         # Subtract the mean and scale
         adapted = frame - mean

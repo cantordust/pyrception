@@ -174,21 +174,22 @@ class Retina:
     ):
 
         if not saccades:
-
             saccades = None
+
+        offset = (0.0, 0.0) if saccades else None
 
         while self.processing:
 
             if saccades and np.random.random() <= 0.05:
                 height_offset = (np.random.random(1) - 0.5) / 4
                 width_offset = (np.random.random(1) - 0.5) / 4
-                saccades = (
+                offset = (
                     height_offset,
                     width_offset,
                 )
 
             frame = self._get_frame()
-            receptor_views = self.receptors.process(frame, saccades)
+            receptor_views = self.receptors.process(frame, offset)
 
             bipolar_views = self.bipolar.process(receptor_views[View.ReceptorAdapted])
 

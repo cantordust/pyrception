@@ -39,27 +39,42 @@ class BipolarLayer(ProtoLayer):
 
         # Dimensions and resize flag
         self.dim = self.compute_dimensions(
-            source.dim.orig.shape,
+            source.dim.shape,
             source.dim.H,
             source.dim.W,
             saccades,
         )
 
+        print(f"==[ bipolar ] dim : {self.dim}")
+
         self.alpha = kwargs.get("alpha", 0.25)
 
         # Temporal mean
         self.tmean = pt.zeros(
-            self.source.dim.padded.H,
-            self.source.dim.padded.W,
+            self.dim.H,
+            self.dim.W,
         )
 
         # Initialise the base
         super().__init__(
-            self.source.dim.padded.H,
-            self.source.dim.padded.W,
+            self.dim.H,
+            self.dim.W,
             *args,
             **kwargs,
         )
+
+    def get_rf_input(
+        self,
+        frame: pt.Tensor,
+    ) -> pt.Tensor:
+
+        stretched = self.stretch(frame)
+
+        mean = pt.mm(self.rf, stretched)
+
+        folded = self.fold(mean, self.dim.H, self.dim.W)
+
+        return folded
 
     def process(
         self,
@@ -78,6 +93,8 @@ class BipolarLayer(ProtoLayer):
         views = {
             View.BipolarMean: self.tmean,
         }
+
+        frame = self.get_rf_input(frame)
 
         diff = frame - self.tmean
 
