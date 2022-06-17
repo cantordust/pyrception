@@ -24,6 +24,7 @@ setup(
         "numpy",
         "dotmap",
         "opencv-python",
+        "matplotlib",
     ],
     license="MIT",
     long_description=open("README.md").read(),

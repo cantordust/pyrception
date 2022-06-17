@@ -1,14 +1,26 @@
 # ------------------------------------------------------------------------------
 # Imports
 # ------------------------------------------------------------------------------
+from typing import Any
+from typing import Dict
 from typing import List
-from typing import Tuple
+from typing import Union
 from typing import Optional
+
+# --------------------------------------
+import numpy as np
 
 # --------------------------------------
 import torch as pt
 
 # --------------------------------------
+import cv2 as cv
+
+# --------------------------------------
+from pyrception.visual.aux.types import View
+from pyrception.visual.proto import ProtoLayer
+from pyrception.visual.receptor import ReceptorLayer
+from pyrception.visual.bipolar import BipolarLayer
 from pyrception.visual.ganglion import GanglionLayer
 
 
@@ -21,217 +33,164 @@ class Retina:
 
     def __init__(
         self,
-        _input_shape: Tuple[int, int],
-        _tau: Optional[pt.Tensor] = None,
-        *args,
-        **kwargs,
+        source: Union[np.ndarray, cv.VideoCapture],
+        scaled_height: Optional[int] = None,
+        scaled_width: Optional[int] = None,
+        saccades: bool = False,
+        receptor_args: Optional[Dict[str, Any]] = None,
+        bipolar_args: Optional[Dict[str, Any]] = None,
     ):
 
-        # The retinalActivation is graded.
+        # Flag indicating whether the source is still being processed
+        self.processing = True
 
-        # Half of the RGCs are ON-type (activated by positive deviations from the mean input)
-        # and the other half are OFF-type (activated by negative deviations from the mean input)
+        # Current frame
+        self.frame = None
 
-        if _tau is None:
-            _tau = pt.full((_input_shape,), 100.0)
+        # Store the source
+        self.source = source
 
-        super().__init__(_input_shape, _tau, *args, **kwargs)
+        # Compute source and output dimensions
+        if scaled_height is not None and scaled_width is not None:
+            raise ValueError("Please provide the new height *or* width, but not both.")
 
-        # ON RGCs
-        self.on = GanglionLayer(_off=False, _size=_input_shape)
+        # A function used to extract a source frame
+        if not isinstance(source, (np.ndarray, cv.VideoCapture)):
+            raise TypeError(f"Invalid input source type '{type(source)}'.")
 
-        # OFF RGCs
-        self.off = GanglionLayer(_off=True, _size=_input_shape)
+        elif isinstance(source, cv.VideoCapture):
+            self.frame_op = lambda processing, src: src.read()
 
-        # The size of the retinal layer is twice the size of the input
-        self.activations = pt.zeros(2 * _input_shape)
+        if isinstance(source, np.ndarray):
+            self.frame = source
+            self.frame_op = lambda processing, src: (processing, self.frame)
 
-    @staticmethod
-    def get_max_kernel_size(
-        _imh: int,
-        _imw: int,
-        _ksize: int,
-        _dilation: int,
-    ):
-        _sum = _ksize
-        _short_fit_sum = 0
-        _long_fit_sum = 0
+        self._get_frame(probe=True)
+        original_shape = list(self.frame.shape)
 
-        # Short and long sides of the image
-        short_side = min(_imh, _imw)
-        long_side = max(_imh, _imw)
+        if receptor_args is None:
+            receptor_args = {}
 
-        # Find the optimal coverage for the short and long sides
-        while True:
-            if _sum <= short_side:
-                _short_fit_sum = _sum
-            _long_fit_sum = _sum
-            _sum += 2 * _ksize * _dilation
-
-            if _sum > long_side:
-                break
-
-            _ksize += _dilation
-
-        # print(f'==[ _short_fit_sum: {_short_fit_sum}')
-        # print(f'==[ _long_fit_sum: {_long_fit_sum}')
-
-        # 0 mask along the height
-        hmask = (
-            _imh - _short_fit_sum if short_side == _imh else _imh - _long_fit_sum
-        ) % _ksize
-
-        # 0 mask along the width
-        wmask = (
-            _imw - _short_fit_sum if short_side == _imw else _imw - _long_fit_sum
-        ) % _ksize
-
-        # print(f'==[ _ksize: {_ksize}')
-        # print(f'==[ hmask: {hmask}')
-        # print(f'==[ wmask: {wmask}')
-
-        return (_ksize, hmask, wmask)
-
-    @staticmethod
-    def make_edrf(
-        _ih: int,
-        _iw: int,
-        _rscale: int = 1,
-    ):
-        """
-        Eccentricity-dependent Receptive Fields.
-        """
-        # Size of the image unrolled into a vector
-        isize = _ih * _iw
-
-        # 9x9 kernel
-        ksize = 9
-
-        rowidx = []
-        colidx = []
-        values = []
-
-        for ks in range(ksize):
-            rowidx.extend([1] * ksize)
-            colidx.extend([i for i in range(ksize)])
-            values.extend([1.0] * ksize)
-
-        edrf = pt.sparse_coo_tensor([rowidx, colidx], values, size=(_ih, _iw))
-
-        print(f"==[ edrf:\n{edrf.to_dense()}")
-
-    def _interleave(self):
-
-        """
-        Interleave on/off activations.
-        """
-
-        self.activations = pt.reshape(
-            pt.stack((self.on.activations, self.off.activations), axis=1),
-            (-1,),
+        self.receptors = ReceptorLayer(
+            original_shape,
+            scaled_height,
+            scaled_width,
+            saccades,
+            **receptor_args,
         )
 
-        if self.activation_history is not None:
-            self.activation_history.append(self.activations.squeeze_().numpy())
+        # print(f"==[ receptors: {self.receptors.kmask.shape}")
 
-    def integrate(
+        if bipolar_args is None:
+            bipolar_args = {}
+
+        self.bipolar = BipolarLayer(
+            self.receptors,
+            saccades,
+            **bipolar_args,
+        )
+
+        # print(f"==[ bipolar: {self.bipolar.kmask.shape}")
+
+        # Display some useful info
+        print(f"==[ Press ESC to quit.")
+
+    def __del__(self):
+
+        self.processing = False
+        cv.destroyAllWindows()
+
+        if isinstance(self.source, cv.VideoCapture):
+            self.source.release()
+
+    def _get_frame(
         self,
-        _input_signals: pt.Tensor,
+        probe: Optional[bool] = False,
     ):
-
         """
-        Integrate raw input signals and trigger action potentials.
+        Extract a frame at a certain offset from the center.
         """
 
-        # Integrate input signals.
-        self.potentials = _input_signals
+        # Get the next frame by applying self.frame_op to the source
+        self.processing, self.frame = self.frame_op(self.processing, self.source)
 
-        # Get the normalised deviation
-        norm_dev = self._norm_deviation()
+        self.frame = cv.cvtColor(self.frame, cv.COLOR_RGB2GRAY)
 
-        # Update the stats
-        self._update_potential_stats()
+        if probe:
+            self.processing = True
+            return self.frame
 
-        # Compute the activations of ON and OFF cells
-        self.on._activate(norm_dev)
-        self.off._activate(norm_dev)
+        if self.receptors.dim.resize:
+            self.frame = cv.resize(
+                self.frame,
+                (self.receptors.dim.W, self.receptors.dim.H),
+                interpolation=cv.INTER_AREA,
+            )
 
-        # Interleave the activations of on and off cells.
-        self._interleave()
+        self.frame = pt.from_numpy(self.frame).float()
 
-    @staticmethod
-    def _make_norm_rfields(
-        _ksize: int,
-        _dilation: int = 2,
-        _scale: int = 1,
-        _kernels: Optional[List] = None,
+        return self.frame
+
+    def show(
+        self,
+        receptor_views: List[pt.Tensor],
+        bipolar_views: List[pt.Tensor],
     ):
 
-        # Stretch
-        s = 2 * _scale * _dilation
+        if len(receptor_views) == 0:
+            return
 
-        # Repetitions per kernel
-        repetitions = []
+        rv = [
+            receptor_views[View.Original],
+            receptor_views[View.ReceptorMean],
+            receptor_views[View.ReceptorAdapted],
+        ]
 
-        # Foveal region
-        if len(_kernels) > 0:
-            # Number of times to repeat the kernel
-            n = _ksize - _dilation
-            retina = _kernels[0].repeat(_scale * 2 * (n + s), _scale * 2 * (n + s))
+        bv = [
+            bipolar_views[View.BipolarMean],
+            bipolar_views[View.BipolarOn],
+            bipolar_views[View.BipolarOff],
+        ]
 
-            # Update the number of kernel repetitions
-            repetitions.append(_scale * 2 * (n + s))
+        receptor = np.hstack([ProtoLayer.scale(view).numpy() for view in rv]).astype(
+            np.uint8
+        )
+        bipolar = np.hstack([ProtoLayer.scale(view).numpy() for view in bv]).astype(
+            np.uint8
+        )
 
-        print(f"==[ fovea size: {retina.size()}")
+        image = np.vstack((receptor, bipolar))
 
-        # The rest of the retina
-        for k_i, kernel in enumerate(_kernels[1:]):
+        # Show all images
+        cv.imshow(f"Result", image)
 
-            # Number of times to repeat the kernel
-            n = _ksize
+        # Press ESC to quit
+        self.processing &= cv.waitKey(10) != 27
 
-            # Update the repetitions
-            repetitions.append(_scale * 2 * (n + s))
-
-            # Increment the kernel size
-            _ksize += _dilation
-
-            # Vertical repetition
-            vrep = kernel.repeat(_scale * s, _scale * 2 * n)
-            # print(f'==[ vpad size: {vpad.size()}')
-
-            # Horizontal repetition
-            hrep = kernel.repeat(_scale * 2 * (n + s), _scale * s)
-            # print(f'==[ hpad size: {hpad.size()}')
-
-            # print(f'==[ retina size: {retina.size()}')
-            retina = pt.cat((vrep, retina), 0)
-            retina = pt.cat((retina, vrep), 0)
-            # print(f'==[ retina size: {retina.size()}')
-
-            retina = pt.cat((hrep, retina), 1)
-            retina = pt.cat((retina, hrep), 1)
-            print(f"==[ retina size: {retina.size()}")
-
-            # print(f'==[ patch:\n{patch}')
-
-        print(f"==[ repetitions: {repetitions}")
-
-        return (retina, repetitions)
-
-    @staticmethod
-    def _make_retinotopic_grid(
-        _ih: int,
-        _iw: int,
-        _init_ksize: int = 3,
-        _dilation: int = 2,
+    def run(
+        self,
+        show: bool = True,
+        saccades: bool = False,
     ):
-        # Compute the maximal kernel size
-        _max_ksize = Retina.get_max_kernel_size(_init_ksize, _dilation, _ih, _iw)
 
-        # Store the kernels in a list
-        kernels = []
+        if not saccades:
 
-        for _ks in range(_init_ksize, _max_ksize + 1, _dilation):
-            # print(f"==[ kernel: {_ks} x {_ks}")
-            kernels.append(GanglionLayer.make_rf(_ks))
+            saccades = None
+
+        while self.processing:
+
+            if saccades and np.random.random() <= 0.05:
+                height_offset = (np.random.random(1) - 0.5) / 4
+                width_offset = (np.random.random(1) - 0.5) / 4
+                saccades = (
+                    height_offset,
+                    width_offset,
+                )
+
+            frame = self._get_frame()
+            receptor_views = self.receptors.process(frame, saccades)
+
+            bipolar_views = self.bipolar.process(receptor_views[View.ReceptorAdapted])
+
+            if show:
+                self.show(receptor_views, bipolar_views)
