@@ -202,8 +202,6 @@ class ReceptorLayer(ProtoLayer):
 
         views[View.ReceptorMean] = mean
 
-        print(f"==[ mean shape : {mean.shape}")
-
         # Subtract the mean and scale
         adapted = frame - mean
         views[View.ReceptorAdapted] = adapted

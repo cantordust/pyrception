@@ -92,7 +92,7 @@ class ProtoLayer:
         w: int,
     ):
 
-        return pt.ones(h, w)
+        return pt.ones(h, w).int()
 
     @staticmethod
     def scale(
@@ -160,6 +160,7 @@ class ProtoLayer:
         if kdist == KernelDist.Flat:
             # * Flat kernel distribution * #
             kdist = ProtoLayer._kdist_flat(h, w)
+            ksizes = kdist * k_min
 
         else:
             if kdist == KernelDist.LogPolar:
@@ -219,6 +220,8 @@ class ProtoLayer:
         kdist: KernelDist = KernelDist.Gaussian,
         decreasing: bool = True,
         smooth: bool = True,
+        *args,
+        **kwargs,
     ):
 
         (self.kmask, ksizes) = self.get_kdist(
