@@ -2,6 +2,7 @@
 # Imports
 # ------------------------------------------------------------------------------
 from typing import Any
+from typing import Set
 from typing import Dict
 from typing import List
 from typing import Union
@@ -17,7 +18,7 @@ import torch as pt
 import cv2 as cv
 
 # --------------------------------------
-from pyrception.visual.aux.types import View
+from pyrception.visual.util.types import View
 from pyrception.visual.proto import ProtoLayer
 from pyrception.visual.receptor import ReceptorLayer
 from pyrception.visual.bipolar import BipolarLayer
@@ -133,31 +134,30 @@ class Retina:
 
     def show(
         self,
-        receptor_views: List[pt.Tensor],
-        bipolar_views: List[pt.Tensor],
+        views: Set[pt.Tensor],
     ):
 
-        if len(receptor_views) == 0:
+        if len(views) == 0:
             return
 
-        rv = [
-            receptor_views[View.Original],
-            receptor_views[View.ReceptorMean],
-            receptor_views[View.ReceptorAdapted],
+        receptor_views = [
+            views[View.Original],
+            views[View.ReceptorMean],
+            views[View.ReceptorAdapted],
         ]
 
-        bv = [
-            bipolar_views[View.BipolarMean],
-            bipolar_views[View.BipolarOn],
-            bipolar_views[View.BipolarOff],
+        bipolar_views = [
+            views[View.BipolarMean],
+            views[View.BipolarOn],
+            views[View.BipolarOff],
         ]
 
-        receptor = np.hstack([ProtoLayer.scale(view).numpy() for view in rv]).astype(
-            np.uint8
-        )
-        bipolar = np.hstack([ProtoLayer.scale(view).numpy() for view in bv]).astype(
-            np.uint8
-        )
+        receptor = np.hstack(
+            [ProtoLayer.scale(view).numpy() for view in receptor_views]
+        ).astype(np.uint8)
+        bipolar = np.hstack(
+            [ProtoLayer.scale(view).numpy() for view in bipolar_views]
+        ).astype(np.uint8)
 
         image = np.vstack((receptor, bipolar))
 
@@ -189,9 +189,8 @@ class Retina:
                 )
 
             frame = self._get_frame()
-            receptor_views = self.receptors.process(frame, offset)
-
-            bipolar_views = self.bipolar.process(receptor_views[View.ReceptorAdapted])
+            views = self.receptors.process(frame, offset)
+            views.update(self.bipolar.process(views[View.ReceptorAdapted]))
 
             if show:
-                self.show(receptor_views, bipolar_views)
+                self.show(views)

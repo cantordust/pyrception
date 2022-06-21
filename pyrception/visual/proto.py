@@ -31,8 +31,8 @@ import torch.nn.functional as ptf
 import cv2 as cv
 
 # --------------------------------------
-from pyrception.visual.aux.types import View
-from pyrception.visual.aux.types import KernelDist
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import KernelDist
 
 
 class ProtoLayer:

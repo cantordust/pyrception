@@ -25,7 +25,7 @@ A very simple example using visual module:
 ```python
 
 import cv2 as cv
-from pyrception.visual.aux.types import KernelDist
+from pyrception.visual.util.types import KernelDist
 from pyrception.visual.retina import Retina
 
 

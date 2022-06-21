@@ -13,8 +13,8 @@ import torch as pt
 import torch.nn.functional as ptf
 
 # --------------------------------------
-from pyrception.visual.aux.types import View
-from pyrception.visual.aux.types import KernelDist
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import KernelDist
 from pyrception.visual.proto import ProtoLayer
 from pyrception.visual.receptor import ReceptorLayer
 

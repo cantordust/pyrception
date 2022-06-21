@@ -35,8 +35,8 @@ pt.set_printoptions(edgeitems=20)
 import cv2 as cv
 
 # --------------------------------------
-from pyrception.visual.aux.types import View
-from pyrception.visual.aux.types import KernelDist
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import KernelDist
 from pyrception.visual.proto import ProtoLayer
 
 
