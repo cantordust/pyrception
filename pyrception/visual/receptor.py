@@ -36,7 +36,7 @@ import cv2 as cv
 
 # --------------------------------------
 from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelDist
+from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.proto import ProtoLayer
 
 
@@ -58,24 +58,26 @@ class ReceptorLayer(ProtoLayer):
         scaled_width: Optional[int] = None,
         saccades: bool = False,
         mode: Optional[enum.Enum] = cv.COLOR_RGB2GRAY,
-        k_min: int = 3,
+        k_min: int = 1,
         k_max: int = 15,
         mh: Optional[int] = None,
         mw: Optional[int] = None,
-        sh: int = 1 / 16,
-        sw: int = 1 / 16,
-        kdist: KernelDist = KernelDist.Gaussian,
+        sh: int = 1 / 8,
+        sw: int = 1 / 8,
+        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
         decreasing: bool = True,
         smooth: bool = True,
     ):
 
         # Dimensions and resize flag
-        self.dim = self.compute_dimensions(
+        self.dim = self._compute_dimensions(
             original_shape,
             scaled_height,
             scaled_width,
             saccades,
         )
+
+        print(f"==[ receptor ] dim: {self.dim}")
 
         # Create a flatmask
         self.flatmask = self.make_flatmask(mode)
@@ -84,7 +86,7 @@ class ReceptorLayer(ProtoLayer):
         if self.flatmask is not None:
             self.dim.D = 1
 
-        super().__init__(
+        (self.kmask, ksizes) = self.get_kdist(
             self.dim.padded.H,
             self.dim.padded.W,
             k_min,
@@ -97,6 +99,12 @@ class ReceptorLayer(ProtoLayer):
             decreasing,
             smooth,
         )
+
+        # Create the receptor fields.
+        # If saccades are supported,
+        # the receptive field map is twice
+        # the size of the original input in each dimension.
+        self.rf = self._make_rf(ksizes)
 
     def make_flatmask(
         self,
@@ -142,33 +150,6 @@ class ReceptorLayer(ProtoLayer):
         #     size=(st_size, st_size),
         # ).to_sparse_csr()
 
-    def get_rf_input(
-        self,
-        frame: pt.Tensor,
-    ) -> pt.Tensor:
-        """
-        Emulates the effect of horizontal cells,
-        which subtract the local mean illumination
-        from each receptor's output before passing
-        it to the bipolar layer.
-
-        Args:
-            frame (pt.Tensor):
-                The input frame.
-
-        Returns:
-            pt.Tensor:
-                A map of the local mean illumination at each pixel.
-        """
-
-        stretched = self.stretch(frame)
-
-        mean = pt.mm(self.rf, stretched)
-
-        folded = self.fold(mean, self.dim.padded.H, self.dim.padded.W)
-
-        return folded
-
     def process(
         self,
         frame: pt.Tensor,
@@ -189,13 +170,13 @@ class ReceptorLayer(ProtoLayer):
             frame *= self.flatmask
 
         if offset is not None:
-            padding = self.get_padding(offset[0], offset[1])
+            padding = self._get_padding(offset[0], offset[1])
             padded = self.pad(frame, padding)
 
         else:
             padded = frame
 
-        mean = self.get_rf_input(padded)
+        mean = self._convolve(padded, self.rf, self.dim.padded.H, self.dim.padded.W)
 
         if offset is not None:
             mean = self.unpad(mean, padding)

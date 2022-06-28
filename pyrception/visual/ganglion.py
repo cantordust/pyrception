@@ -1,6 +1,7 @@
 # ------------------------------------------------------------------------------
 # Imports
 # ------------------------------------------------------------------------------
+from typing import Tuple
 from typing import Optional
 
 # --------------------------------------
@@ -8,10 +9,14 @@ import torch as pt
 import torch.functional as ptf
 
 # --------------------------------------
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import KernelSizeDist
+from pyrception.visual.util.types import KernelWeightDist
 from pyrception.visual.bipolar import BipolarLayer
+from pyrception.visual.proto import ProtoLayer
 
 
-class GanglionLayer:
+class GanglionLayer(ProtoLayer):
 
     """
     A layer of ON- and OFF-type RGCs.
@@ -19,72 +24,86 @@ class GanglionLayer:
 
     def __init__(
         self,
-        width: int,
-        height: int,
-        off: bool = False,
+        source: BipolarLayer,
+        saccades: bool = False,
+        k_min: int = 1,
+        k_max: int = 9,
+        mh: Optional[int] = None,
+        mw: Optional[int] = None,
+        sh: int = 1 / 8,
+        sw: int = 1 / 8,
+        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
+        decreasing: bool = False,
+        smooth: bool = True,
     ):
 
-        # Bipolar cell layer.
-        self.bplayer = BipolarLayer()
+        # Ganglion cells.
+        self.source = source
 
-        # Actual activations
-        self.activations = pt.zeros(width)
-
-        # A uniform baseline used in the element-wise
-        # comparison with pt.where
-        self.baseline = pt.zeros(width)
-
-    def make_rf(_size: int):
-
-        # Figure out if the kernel size is odd or even
-        odd = _size % 2 == 1
-
-        # Center size
-        center_size = _size // 2
-
-        if odd and center_size % 2 == 0:
-            center_size += 1
-
-        elif not odd and center_size % 2 == 1:
-            center_size -= 1
-
-        print(f"==[ center size: {center_size}")
-
-        # Surround size
-        surround_size = (_size - center_size) // 2
-        print(f"==[ surround size:\n{surround_size}")
-
-        # Center and surround receptor weights
-        center_weight = 1.0 / (center_size**2)
-        surround_weight = -1.0 / (_size**2 - center_size**2)
-
-        # Create the center and surround
-        center = pt.ones((center_size, center_size)) * center_weight
-
-        kernel = ptf.pad(
-            center,
-            (surround_size, surround_size, surround_size, surround_size),
-            "constant",
-            surround_weight,
+        # Dimensions and resize flag
+        self.dim = self._compute_dimensions(
+            source.dim.shape,
+            source.dim.H,
+            source.dim.W,
+            saccades,
         )
 
-        # Confirm that the kernel sums to 0 if illuminated uniformly
-        # print(f'==[ kernel:\n{kernel}')
-        # print(f'==[ sum: {kernel.sum()}')
-        return kernel
+        print(f"==[ ganglion ] dim: {self.dim}")
 
-    # kernel = make_rf(10)
-    # print(f'==[ kernel: {kernel}')
-
-    def _activate(self, norm_dev):
-
-        # Get the normalised deviation from the mean.
-        # The activation depends on whether the cells are ON or OFF.
-        norm_dev = pt.where(
-            self.comp_op(norm_dev, self.baseline),
-            pt.abs(norm_dev),
-            self.baseline,
+        (_, centre_ksizes) = self.get_kdist(
+            self.dim.H,
+            self.dim.W,
+            k_min,
+            k_max,
+            mh,
+            mw,
+            sh,
+            sw,
+            kdist,
+            decreasing,
+            smooth,
         )
 
-        # Compute the new activations.
-        self.activations = pt.tanh(norm_dev)
+        surround_ksizes = (centre_ksizes * 3).int()
+
+        # Receptor field.
+        self.rf_centre = self._make_rf(centre_ksizes, kwdist=KernelWeightDist.Gaussian)
+        self.rf_surround = self._make_rf(
+            surround_ksizes, kwdist=KernelWeightDist.Gaussian, scale=0.75
+        )
+
+        self.zero_baseline = pt.zeros(self.dim.H, self.dim.W)
+        self.one_baseline = pt.ones(self.dim.H, self.dim.W)
+
+    def process(
+        self,
+        on: pt.Tensor,
+        off: pt.Tensor,
+        saccades: Optional[Tuple[float, float]] = None,
+    ) -> pt.Tensor:
+        """
+        Compute the activation of ON/OFF and OFF/ON RGCs.
+
+        This is where spikes are produced.
+        """
+
+        views = {}
+
+        on_center = self._convolve(on, self.rf_centre, self.dim.H, self.dim.W)
+        off_center = self._convolve(off, self.rf_centre, self.dim.H, self.dim.W)
+
+        on_surround = self._convolve(on, self.rf_surround, self.dim.H, self.dim.W)
+        off_surround = self._convolve(off, self.rf_surround, self.dim.H, self.dim.W)
+
+        # onoff = on_center - off_surround
+
+        # print(f"==[ onoffmax: {onoff.min()} - {onoff.max()}")
+
+        views[View.GanglionOnOff] = pt.where(
+            on_center - off_surround > 0.0, self.one_baseline, self.zero_baseline
+        )
+        views[View.GanglionOffOn] = pt.where(
+            off_center - on_surround > 0.0, self.one_baseline, self.zero_baseline
+        )
+
+        return views

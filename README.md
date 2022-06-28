@@ -25,9 +25,8 @@ A very simple example using visual module:
 ```python
 
 import cv2 as cv
-from pyrception.visual.util.types import KernelDist
+from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.retina import Retina
-
 
 def test():
 
@@ -35,18 +34,23 @@ def test():
 
     saccades = False
 
+    ksizedist = KernelSizeDist.LogPolar
+
     retina = Retina(
         src,
-        scaled_height=256,
+        scaled_height=128,
         saccades=saccades,
         receptor_args={
-            "kdist": KernelDist.Gaussian,
-            "sh": 1 / 16,
-            "sw": 1 / 16,
+            "kdist": ksizedist,
+            "sh": 1 / 8,
+            "sw": 1 / 8,
         },
         bipolar_args={
             "alpha": 0.1,
-            "kdist": KernelDist.Gaussian,
+            "kdist": ksizedist,
+        },
+        ganglion_args={
+            "kdist": ksizedist,
         },
     )
 

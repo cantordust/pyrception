@@ -14,7 +14,7 @@ import torch.nn.functional as ptf
 
 # --------------------------------------
 from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelDist
+from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.proto import ProtoLayer
 from pyrception.visual.receptor import ReceptorLayer
 
@@ -31,14 +31,22 @@ class BipolarLayer(ProtoLayer):
         self,
         source: ReceptorLayer,
         saccades: bool = False,
-        *args,
-        **kwargs,
+        alpha: float = 0.1,
+        k_min: int = 1,
+        k_max: int = 11,
+        mh: Optional[int] = None,
+        mw: Optional[int] = None,
+        sh: int = 1 / 8,
+        sw: int = 1 / 8,
+        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
+        decreasing: bool = False,
+        smooth: bool = True,
     ):
 
         self.source = source
 
         # Dimensions and resize flag
-        self.dim = self.compute_dimensions(
+        self.dim = self._compute_dimensions(
             source.dim.shape,
             source.dim.H,
             source.dim.W,
@@ -47,7 +55,7 @@ class BipolarLayer(ProtoLayer):
 
         print(f"==[ bipolar ] dim : {self.dim}")
 
-        self.alpha = kwargs.get("alpha", 0.25)
+        self.alpha = alpha
 
         # Temporal mean
         self.tmean = pt.zeros(
@@ -55,26 +63,22 @@ class BipolarLayer(ProtoLayer):
             self.dim.W,
         )
 
-        # Initialise the base
-        super().__init__(
+        (self.kmask, ksizes) = self.get_kdist(
             self.dim.H,
             self.dim.W,
-            *args,
-            **kwargs,
+            k_min,
+            k_max,
+            mh,
+            mw,
+            sh,
+            sw,
+            kdist,
+            decreasing,
+            smooth,
         )
 
-    def get_rf_input(
-        self,
-        frame: pt.Tensor,
-    ) -> pt.Tensor:
-
-        stretched = self.stretch(frame)
-
-        mean = pt.mm(self.rf, stretched)
-
-        folded = self.fold(mean, self.dim.H, self.dim.W)
-
-        return folded
+        # Receptor fields.
+        self.rf = self._make_rf(ksizes)
 
     def process(
         self,
@@ -85,7 +89,7 @@ class BipolarLayer(ProtoLayer):
         Compute the offset from the running mean
         in both positive and negative direction.
 
-        These become the separate ON and OFF channels.
+        These define the ON and OFF channels.
         """
 
         # Update the internal state
@@ -94,14 +98,15 @@ class BipolarLayer(ProtoLayer):
             View.BipolarMean: self.tmean,
         }
 
-        frame = self.get_rf_input(frame)
-
+        frame = self._convolve(frame, self.rf, self.dim.H, self.dim.W)
         diff = frame - self.tmean
 
         views[View.BipolarOn] = ptf.relu(diff)
         views[View.BipolarOff] = ptf.relu(-diff)
 
         # Update the running mean
-        self.tmean += self.alpha * (frame - self.tmean)
+        self.tmean += self.alpha * diff
+
+        # print(f"==[ self.tmean:\n{self.tmean} ({self.tmean.shape})")
 
         return views

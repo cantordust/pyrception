@@ -40,6 +40,7 @@ class Retina:
         saccades: bool = False,
         receptor_args: Optional[Dict[str, Any]] = None,
         bipolar_args: Optional[Dict[str, Any]] = None,
+        ganglion_args: Optional[Dict[str, Any]] = None,
     ):
 
         # Flag indicating whether the source is still being processed
@@ -69,6 +70,7 @@ class Retina:
         self._get_frame(probe=True)
         original_shape = list(self.frame.shape)
 
+        # * Receptors + horizontal cells * #
         if receptor_args is None:
             receptor_args = {}
 
@@ -82,6 +84,7 @@ class Retina:
 
         # print(f"==[ receptors: {self.receptors.kmask.shape}")
 
+        # * Bipolar cells * #
         if bipolar_args is None:
             bipolar_args = {}
 
@@ -89,6 +92,17 @@ class Retina:
             self.receptors,
             saccades,
             **bipolar_args,
+        )
+
+        # * Amacrine + ganglion cells * #
+
+        if ganglion_args is None:
+            ganglion_args = {}
+
+        self.ganglion = GanglionLayer(
+            self.bipolar,
+            saccades,
+            **ganglion_args,
         )
 
         # print(f"==[ bipolar: {self.bipolar.kmask.shape}")
@@ -152,14 +166,25 @@ class Retina:
             views[View.BipolarOff],
         ]
 
+        ganglion_views = [
+            views[View.GanglionOnOff],
+            views[View.GanglionOffOn],
+            pt.zeros_like(views[View.GanglionOnOff]),
+        ]
+
         receptor = np.hstack(
             [ProtoLayer.scale(view).numpy() for view in receptor_views]
         ).astype(np.uint8)
+
         bipolar = np.hstack(
             [ProtoLayer.scale(view).numpy() for view in bipolar_views]
         ).astype(np.uint8)
 
-        image = np.vstack((receptor, bipolar))
+        ganglion = np.hstack(
+            [ProtoLayer.scale(view).numpy() for view in ganglion_views]
+        ).astype(np.uint8)
+
+        image = np.vstack((receptor, bipolar, ganglion))
 
         # Show all images
         cv.imshow(f"Result", image)
@@ -191,6 +216,9 @@ class Retina:
             frame = self._get_frame()
             views = self.receptors.process(frame, offset)
             views.update(self.bipolar.process(views[View.ReceptorAdapted]))
+            views.update(
+                self.ganglion.process(views[View.BipolarOn], views[View.BipolarOff])
+            )
 
             if show:
                 self.show(views)

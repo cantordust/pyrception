@@ -32,7 +32,8 @@ import cv2 as cv
 
 # --------------------------------------
 from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelDist
+from pyrception.visual.util.types import KernelSizeDist
+from pyrception.visual.util.types import KernelWeightDist
 
 
 class ProtoLayer:
@@ -63,6 +64,7 @@ class ProtoLayer:
         sh: int = 1 / 16,
         sw: int = 1 / 16,
         decreasing: bool = True,
+        norm: bool = False,
     ):
         x, y = ProtoLayer._make_mesh(h, w)
 
@@ -70,6 +72,9 @@ class ProtoLayer:
         dist = pt.exp(
             -((x - mh) ** 2 / (2 * (sh * h) ** 2) + (y - mw) ** 2 / (2 * (sw * w) ** 2))
         )
+
+        if norm:
+            dist /= 2 * pt.pi * sh * h * sw * w
 
         return dist if decreasing else 1 - dist
 
@@ -146,7 +151,7 @@ class ProtoLayer:
         mw: Optional[int] = None,
         sh: Optional[int] = 1 / 16,
         sw: Optional[int] = 1 / 16,
-        kdist: KernelDist = KernelDist.Gaussian,
+        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
         decreasing: bool = True,
         smooth: bool = True,
     ):
@@ -157,17 +162,17 @@ class ProtoLayer:
         if mw is None:
             mw = w // 2
 
-        if kdist == KernelDist.Flat:
+        if kdist == KernelSizeDist.Flat:
             # * Flat kernel distribution * #
             kdist = ProtoLayer._kdist_flat(h, w)
             ksizes = kdist * k_min
 
         else:
-            if kdist == KernelDist.LogPolar:
+            if kdist == KernelSizeDist.LogPolar:
                 # * Log-polar kernel distribution * #
                 kdist = ProtoLayer._kdist_logpolar(h, w, sh, sw, decreasing)
 
-            elif kdist == KernelDist.Gaussian:
+            elif kdist == KernelSizeDist.Gaussian:
                 # * Gaussian kernel distribution * #
                 kdist = ProtoLayer._kdist_gaussian(h, w, mh, mw, sh, sw, decreasing)
 
@@ -207,44 +212,7 @@ class ProtoLayer:
             padding[0] : -padding[1],
         ]
 
-    def __init__(
-        self,
-        height,
-        width,
-        k_min: int = 3,
-        k_max: int = 15,
-        mh: Optional[int] = None,
-        mw: Optional[int] = None,
-        sh: int = 1 / 16,
-        sw: int = 1 / 16,
-        kdist: KernelDist = KernelDist.Gaussian,
-        decreasing: bool = True,
-        smooth: bool = True,
-        *args,
-        **kwargs,
-    ):
-
-        (self.kmask, ksizes) = self.get_kdist(
-            height,
-            width,
-            k_min,
-            k_max,
-            mh,
-            mw,
-            sh,
-            sw,
-            kdist,
-            decreasing,
-            smooth,
-        )
-
-        # Create the receptor field.
-        # If saccades are supported,
-        # the receptive field is twice
-        # the size of the original input in each dimension.
-        self.rf = self._make_rf(ksizes)
-
-    def get_padding(
+    def _get_padding(
         self,
         height_offset: float = 0.0,
         width_offset: float = 0.0,
@@ -281,7 +249,7 @@ class ProtoLayer:
 
         return padding
 
-    def compute_dimensions(
+    def _compute_dimensions(
         self,
         original_shape: List[int],
         scaled_height: Optional[int] = None,
@@ -297,8 +265,9 @@ class ProtoLayer:
         # NOTE: Perhaps use transparency as well?
         dim.orig.shape = original_shape
         (dim.orig.H, dim.orig.W, dim.orig.D) = tuple(original_shape)
-        (dim.H, dim.W, dim.D) = tuple(original_shape)
         dim.orig.span = dim.orig.H * dim.orig.W * dim.orig.D
+        (dim.H, dim.W, dim.D) = tuple(original_shape)
+        dim.shape = original_shape
 
         dim.resize = False
 
@@ -346,15 +315,58 @@ class ProtoLayer:
 
         return dim
 
+    def _convolve(
+        self,
+        frame: pt.Tensor,
+        rf: pt.Tensor,
+        height: int,
+        width: int,
+    ) -> pt.Tensor:
+        """
+        Convolve the input frame with the current layer's receptive field.
+
+        The height and width parameters are necessary to fold the convolved stretched frame
+        back into a 2D frame with the right dimensions.
+
+        Returns:
+
+        Args:
+            frame (pt.Tensor):
+                The input frame.
+
+            rf (pt.Tensor):
+                Receptive field
+
+            height (int):
+                The height of the folded convolved image.
+
+            width (int):
+                The width of the folded convolved image.
+
+        Returns:
+            pt.Tensor:
+                A map of the local mean illumination at each pixel.
+        """
+
+        stretched = self.stretch(frame)
+
+        mean = pt.mm(rf, stretched)
+
+        folded = self.fold(mean, height, width)
+
+        return folded
+
     def _make_rf(
         self,
-        kdist: pt.Tensor,
+        ksizes: pt.Tensor,
+        kwdist: KernelWeightDist = KernelWeightDist.Proportional,
+        scale: float = 1.0,
     ):
 
         # Compute tensor indices for each kernel size
         indices = {}
-        for i in range(kdist.min(), kdist.max() + 1):
-            indices[i] = pt.where(kdist == i)
+        for i in range(ksizes.min(), ksizes.max() + 1):
+            indices[i] = pt.where(ksizes == i)
 
         rf_rows = []
         rf_cols = []
@@ -365,10 +377,11 @@ class ProtoLayer:
             if rows.numel() == 0:
                 continue
 
-            # * Row and column spans for the kernels * #
+            # * Row and column spans for the current kernel size * #
             kspan = pt.linspace(-ksize // 2 + 1, ksize // 2, ksize)
             # print(f'==[ diff:\n{diff}')
 
+            # Rows spanned by stretched kernels
             krowspan = (
                 (rows[None, :].repeat(ksize, 1) + kspan[:, None])
                 .t()
@@ -376,6 +389,7 @@ class ProtoLayer:
                 .int()
             ).flatten()
 
+            # Columns spanned by stretched kernels
             kcolspan = (
                 (cols[None, :].repeat(ksize, 1) + kspan[:, None])
                 .t()
@@ -410,7 +424,37 @@ class ProtoLayer:
 
             rf_rows.extend(sp_rows.tolist())
             rf_cols.extend(sp_cols.tolist())
-            rf_vals.extend([1 / ksize**2] * sp_rows.shape[0])
+
+            if kwdist == KernelWeightDist.Gaussian:
+
+                mean = ksize // 2
+
+                if ksize % 2 == 0:
+                    mean -= 0.5
+
+                kvals = (
+                    ProtoLayer._kdist_gaussian(
+                        ksize,
+                        ksize,
+                        mean,
+                        mean,
+                        0.5,
+                        0.5,
+                        norm=False,
+                    )
+                    .repeat(len(rows), 1)
+                    .flatten()[boundary_mask]
+                    * scale
+                ).tolist()
+
+            elif kwdist == KernelWeightDist.Proportional:
+                val = (1 / ksize**2) * scale
+                kvals = [val] * sp_rows.shape[0]
+
+            else:
+                kvals = [scale] * sp_rows.shape[0]
+
+            rf_vals.extend(kvals)
 
         rf = pt.sparse_coo_tensor(
             np.array(
