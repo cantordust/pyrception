@@ -11,7 +11,7 @@ class Version(IntEnum):
 
     major = 0
     minor = 0
-    patch = 1
+    patch = 2
 
 
 setup(
@@ -20,6 +20,8 @@ setup(
     version=f"{Version.major}.{Version.minor}.{Version.patch}",
     packages=["pyrception"],
     install_requires=[
+        "loguru",
+        "python-decouple",
         "torch",
         "numpy",
         "dotmap",

@@ -1,18 +1,18 @@
 # ------------------------------------------------------------------------------
 # Imports
 # ------------------------------------------------------------------------------
-from typing import Set
-from typing import List
-from typing import Dict
 from typing import Tuple
-from typing import Union
 from typing import Optional
+
+# --------------------------------------
+from loguru import logger
 
 # --------------------------------------
 import numpy as np
 
 # --------------------------------------
 import math
+
 
 # --------------------------------------
 import enum
@@ -35,6 +35,7 @@ pt.set_printoptions(edgeitems=20)
 import cv2 as cv
 
 # --------------------------------------
+from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.proto import ProtoLayer
@@ -77,7 +78,7 @@ class ReceptorLayer(ProtoLayer):
             saccades,
         )
 
-        print(f"==[ receptor ] dim: {self.dim}")
+        logger.info(f"==[ receptor ] dim: {self.dim}")
 
         # Create a flatmask
         self.flatmask = self.make_flatmask(mode)
@@ -106,6 +107,7 @@ class ReceptorLayer(ProtoLayer):
         # the size of the original input in each dimension.
         self.rf = self._make_rf(ksizes)
 
+    @logger.catch
     def make_flatmask(
         self,
         mode: Optional[enum.Enum] = None,
@@ -150,6 +152,7 @@ class ReceptorLayer(ProtoLayer):
         #     size=(st_size, st_size),
         # ).to_sparse_csr()
 
+    @logger.catch
     def process(
         self,
         frame: pt.Tensor,

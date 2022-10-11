@@ -9,6 +9,9 @@ from typing import Union
 from typing import Optional
 
 # --------------------------------------
+from loguru import logger
+
+# --------------------------------------
 import numpy as np
 
 # --------------------------------------
@@ -18,6 +21,7 @@ import torch as pt
 import cv2 as cv
 
 # --------------------------------------
+from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.proto import ProtoLayer
 from pyrception.visual.receptor import ReceptorLayer
@@ -105,18 +109,19 @@ class Retina:
             **ganglion_args,
         )
 
-        # print(f"==[ bipolar: {self.bipolar.kmask.shape}")
+        logger.info(f"==[ bipolar ] kmask shape: {self.bipolar.kmask.shape}")
 
         # Display some useful info
-        print(f"==[ Press ESC to quit.")
+        logger.info("Press ESC to quit.")
 
     def __del__(self):
 
         self.processing = False
-        cv.destroyAllWindows()
 
         if isinstance(self.source, cv.VideoCapture):
             self.source.release()
+
+        cv.destroyAllWindows()
 
     def _get_frame(
         self,
@@ -157,11 +162,14 @@ class Retina:
         receptor_views = [
             views[View.Original],
             views[View.ReceptorMean],
+        ]
+
+        adapted_views = [
             views[View.ReceptorAdapted],
+            views[View.BipolarMean],
         ]
 
         bipolar_views = [
-            views[View.BipolarMean],
             views[View.BipolarOn],
             views[View.BipolarOff],
         ]
@@ -169,22 +177,122 @@ class Retina:
         ganglion_views = [
             views[View.GanglionOnOff],
             views[View.GanglionOffOn],
-            pt.zeros_like(views[View.GanglionOnOff]),
         ]
 
-        receptor = np.hstack(
+        receptor = np.vstack(
             [ProtoLayer.scale(view).numpy() for view in receptor_views]
         ).astype(np.uint8)
 
-        bipolar = np.hstack(
+        adapted = np.vstack(
+            [ProtoLayer.scale(view).numpy() for view in adapted_views]
+        ).astype(np.uint8)
+
+        bipolar = np.vstack(
             [ProtoLayer.scale(view).numpy() for view in bipolar_views]
         ).astype(np.uint8)
 
-        ganglion = np.hstack(
+        ganglion = np.vstack(
             [ProtoLayer.scale(view).numpy() for view in ganglion_views]
         ).astype(np.uint8)
 
-        image = np.vstack((receptor, bipolar, ganglion))
+        image = np.hstack((receptor, adapted, bipolar, ganglion))
+
+        font = cv.FONT_HERSHEY_SIMPLEX
+        fontScale = 0.45
+        fontColor = (255, 255, 255)
+        thickness = 1
+        lineType = 2
+
+        w_offset = 0
+        h_offset = 10
+
+        cv.putText(
+            image,
+            "Raw signal (receptor)",
+            (w_offset, h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "Local mean (horizontal)",
+            (w_offset, self.receptors.dim.H + h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "Normalised input (receptor - horizontal)",
+            (self.receptors.dim.W + w_offset, h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "Temporal running mean of normalised input",
+            (self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "ON-type bipolar (Ninput - Tmean > 0)",
+            (2 * self.receptors.dim.W + w_offset, h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "OFF-type bipolar (Ninput - Tmean < 0)",
+            (2 * self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "ON-type ganglion",
+            (3 * self.receptors.dim.W + w_offset, h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "OFF-type ganglion",
+            (3 * self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
 
         # Show all images
         cv.imshow(f"Result", image)
@@ -192,16 +300,24 @@ class Retina:
         # Press ESC to quit
         self.processing &= cv.waitKey(10) != 27
 
+        return image
+
     def run(
         self,
         show: bool = True,
         saccades: bool = False,
+        save_frames: Optional[Set[int]] = None,
     ):
 
         if not saccades:
             saccades = None
 
         offset = (0.0, 0.0) if saccades else None
+
+        n_frame = 0
+
+        if save_frames is None:
+            save_frames = set()
 
         while self.processing:
 
@@ -214,6 +330,8 @@ class Retina:
                 )
 
             frame = self._get_frame()
+            n_frame += 1
+
             views = self.receptors.process(frame, offset)
             views.update(self.bipolar.process(views[View.ReceptorAdapted]))
             views.update(
@@ -221,4 +339,7 @@ class Retina:
             )
 
             if show:
-                self.show(views)
+                image = self.show(views)
+                if n_frame in save_frames:
+                    cv.imwrite(f"./frame_{n_frame}.png", image)
+                    self.processing = False

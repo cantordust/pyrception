@@ -12,6 +12,9 @@ from typing import Union
 from typing import Optional
 
 # --------------------------------------
+from loguru import logger
+
+# --------------------------------------
 import numpy as np
 
 # --------------------------------------
@@ -31,6 +34,7 @@ import torch.nn.functional as ptf
 import cv2 as cv
 
 # --------------------------------------
+from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.util.types import KernelWeightDist
@@ -65,7 +69,7 @@ class ProtoLayer:
         sw: int = 1 / 16,
         decreasing: bool = True,
         norm: bool = False,
-    ):
+    ) -> np.ndarray:
         x, y = ProtoLayer._make_mesh(h, w)
 
         # NOTE: this is an *unnormalised* gaussian
@@ -438,9 +442,8 @@ class ProtoLayer:
                         ksize,
                         mean,
                         mean,
-                        0.5,
-                        0.5,
-                        norm=False,
+                        1.0,
+                        1.0,
                     )
                     .repeat(len(rows), 1)
                     .flatten()[boundary_mask]
@@ -448,6 +451,7 @@ class ProtoLayer:
                 ).tolist()
 
             elif kwdist == KernelWeightDist.Proportional:
+
                 val = (1 / ksize**2) * scale
                 kvals = [val] * sp_rows.shape[0]
 

@@ -1,18 +1,18 @@
 # ------------------------------------------------------------------------------
 # Imports
 # ------------------------------------------------------------------------------
-from typing import Set
-from typing import List
-from typing import Dict
 from typing import Tuple
-from typing import Union
 from typing import Optional
+
+# --------------------------------------
+from loguru import logger
 
 # --------------------------------------
 import torch as pt
 import torch.nn.functional as ptf
 
 # --------------------------------------
+from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.proto import ProtoLayer
@@ -53,7 +53,7 @@ class BipolarLayer(ProtoLayer):
             saccades,
         )
 
-        print(f"==[ bipolar ] dim : {self.dim}")
+        logger.info(f"==[ bipolar ] dim : {self.dim}")
 
         self.alpha = alpha
 
@@ -80,6 +80,7 @@ class BipolarLayer(ProtoLayer):
         # Receptor fields.
         self.rf = self._make_rf(ksizes)
 
+    @logger.catch
     def process(
         self,
         frame: pt.Tensor,

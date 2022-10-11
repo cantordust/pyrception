@@ -5,10 +5,14 @@ from typing import Tuple
 from typing import Optional
 
 # --------------------------------------
+from loguru import logger
+
+# --------------------------------------
 import torch as pt
 import torch.functional as ptf
 
 # --------------------------------------
+from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.util.types import KernelSizeDist
 from pyrception.visual.util.types import KernelWeightDist
@@ -48,7 +52,7 @@ class GanglionLayer(ProtoLayer):
             saccades,
         )
 
-        print(f"==[ ganglion ] dim: {self.dim}")
+        logger.info(f"==[ ganglion ] dim: {self.dim}")
 
         (_, centre_ksizes) = self.get_kdist(
             self.dim.H,
@@ -64,16 +68,19 @@ class GanglionLayer(ProtoLayer):
             smooth,
         )
 
-        surround_ksizes = (centre_ksizes * 3).int()
+        surround_ksizes = (centre_ksizes * 2.8).int()
 
         # Receptor field.
-        self.rf_centre = self._make_rf(centre_ksizes, kwdist=KernelWeightDist.Gaussian)
-        self.rf_surround = self._make_rf(
-            surround_ksizes, kwdist=KernelWeightDist.Gaussian, scale=0.75
+        self.rf_centre = self._make_rf(
+            centre_ksizes,
+            kwdist=KernelWeightDist.Gaussian,
         )
 
-        self.zero_baseline = pt.zeros(self.dim.H, self.dim.W)
-        self.one_baseline = pt.ones(self.dim.H, self.dim.W)
+        self.rf_surround = self._make_rf(
+            surround_ksizes,
+            kwdist=KernelWeightDist.Gaussian,
+            scale=1,
+        )
 
     def process(
         self,
@@ -99,11 +106,7 @@ class GanglionLayer(ProtoLayer):
 
         # print(f"==[ onoffmax: {onoff.min()} - {onoff.max()}")
 
-        views[View.GanglionOnOff] = pt.where(
-            on_center - off_surround > 0.0, self.one_baseline, self.zero_baseline
-        )
-        views[View.GanglionOffOn] = pt.where(
-            off_center - on_surround > 0.0, self.one_baseline, self.zero_baseline
-        )
+        views[View.GanglionOnOff] = pt.where(on_center - off_surround > 0.0, 1.0, 0.0)
+        views[View.GanglionOffOn] = pt.where(off_center - on_surround > 0.0, 1.0, 0.0)
 
         return views
