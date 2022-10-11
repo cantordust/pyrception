@@ -1,6 +1,6 @@
 /*
 **__pycache__
-!pyrception
+!/pyrception/**
 /pyrception/**.png
 /pyrception/**.pdf
 !.gitignore
