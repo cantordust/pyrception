@@ -38,6 +38,7 @@ import cv2 as cv
 from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.util.types import KernelSizeDist
+from pyrception.visual.util.types import KernelWeightDist
 from pyrception.visual.proto import ProtoLayer
 
 
@@ -101,11 +102,14 @@ class ReceptorLayer(ProtoLayer):
             smooth,
         )
 
-        # Create the receptor fields.
+        # Create the receptive fields.
         # If saccades are supported,
         # the receptive field map is twice
         # the size of the original input in each dimension.
-        self.rf = self._make_rf(ksizes)
+        self.rf = self._make_rf(
+            ksizes,
+            kwdist=KernelWeightDist.Proportional,
+        )
 
     @logger.catch
     def make_flatmask(

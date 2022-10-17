@@ -68,18 +68,19 @@ class GanglionLayer(ProtoLayer):
             smooth,
         )
 
-        surround_ksizes = (centre_ksizes * 2.8).int()
+        surround_ksizes = (centre_ksizes * 2 + 1).int()
 
-        # Receptor field.
+        # Receptive fields.
         self.rf_centre = self._make_rf(
             centre_ksizes,
             kwdist=KernelWeightDist.Gaussian,
+            # norm=True,
         )
 
         self.rf_surround = self._make_rf(
             surround_ksizes,
             kwdist=KernelWeightDist.Gaussian,
-            scale=1,
+            # norm=True,
         )
 
     def process(

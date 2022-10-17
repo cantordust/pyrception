@@ -15,6 +15,7 @@ import torch.nn.functional as ptf
 from pyrception import conf
 from pyrception.visual.util.types import View
 from pyrception.visual.util.types import KernelSizeDist
+from pyrception.visual.util.types import KernelWeightDist
 from pyrception.visual.proto import ProtoLayer
 from pyrception.visual.receptor import ReceptorLayer
 
@@ -77,8 +78,11 @@ class BipolarLayer(ProtoLayer):
             smooth,
         )
 
-        # Receptor fields.
-        self.rf = self._make_rf(ksizes)
+        # Receptive fields.
+        self.rf = self._make_rf(
+            ksizes,
+            kwdist=KernelWeightDist.Proportional,
+        )
 
     @logger.catch
     def process(

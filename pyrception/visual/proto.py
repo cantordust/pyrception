@@ -363,8 +363,9 @@ class ProtoLayer:
     def _make_rf(
         self,
         ksizes: pt.Tensor,
-        kwdist: KernelWeightDist = KernelWeightDist.Proportional,
+        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
         scale: float = 1.0,
+        norm: bool = False,
     ):
 
         # Compute tensor indices for each kernel size
@@ -436,18 +437,16 @@ class ProtoLayer:
                 if ksize % 2 == 0:
                     mean -= 0.5
 
+                kvals = ProtoLayer._kdist_gaussian(
+                    ksize,
+                    ksize,
+                    mean,
+                    mean,
+                    norm=norm,
+                )
+
                 kvals = (
-                    ProtoLayer._kdist_gaussian(
-                        ksize,
-                        ksize,
-                        mean,
-                        mean,
-                        1.0,
-                        1.0,
-                    )
-                    .repeat(len(rows), 1)
-                    .flatten()[boundary_mask]
-                    * scale
+                    kvals.repeat(len(rows), 1).flatten()[boundary_mask] * scale
                 ).tolist()
 
             elif kwdist == KernelWeightDist.Proportional:
