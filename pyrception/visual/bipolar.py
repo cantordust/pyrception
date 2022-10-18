@@ -8,6 +8,9 @@ from typing import Optional
 from loguru import logger
 
 # --------------------------------------
+import random
+
+# --------------------------------------
 import torch as pt
 import torch.nn.functional as ptf
 
@@ -88,7 +91,6 @@ class BipolarLayer(ProtoLayer):
     def process(
         self,
         frame: pt.Tensor,
-        saccades: Optional[Tuple[float, float]] = None,
     ) -> pt.Tensor:
         """
         Compute the offset from the running mean

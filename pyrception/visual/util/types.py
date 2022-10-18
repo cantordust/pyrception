@@ -19,6 +19,7 @@ class View(enum.Enum):
     BipolarOff = enum.auto()
     GanglionOnOff = enum.auto()
     GanglionOffOn = enum.auto()
+    OpticalFlow = enum.auto()
 
 
 class KernelSizeDist(enum.Enum):

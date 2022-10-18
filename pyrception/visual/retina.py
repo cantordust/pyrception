@@ -162,14 +162,11 @@ class Retina:
         receptor_views = [
             views[View.Original],
             views[View.ReceptorMean],
-        ]
-
-        adapted_views = [
             views[View.ReceptorAdapted],
-            views[View.BipolarMean],
         ]
 
         bipolar_views = [
+            views[View.BipolarMean],
             views[View.BipolarOn],
             views[View.BipolarOff],
         ]
@@ -177,14 +174,11 @@ class Retina:
         ganglion_views = [
             views[View.GanglionOnOff],
             views[View.GanglionOffOn],
+            pt.zeros_like(views[View.GanglionOffOn]),
         ]
 
         receptor = np.vstack(
             [ProtoLayer.scale(view).numpy() for view in receptor_views]
-        ).astype(np.uint8)
-
-        adapted = np.vstack(
-            [ProtoLayer.scale(view).numpy() for view in adapted_views]
         ).astype(np.uint8)
 
         bipolar = np.vstack(
@@ -195,7 +189,7 @@ class Retina:
             [ProtoLayer.scale(view).numpy() for view in ganglion_views]
         ).astype(np.uint8)
 
-        image = np.hstack((receptor, adapted, bipolar, ganglion))
+        image = np.hstack((receptor, bipolar, ganglion))
 
         font = cv.FONT_HERSHEY_SIMPLEX
         fontScale = 0.45
@@ -230,7 +224,18 @@ class Retina:
 
         cv.putText(
             image,
-            "Normalised input (receptor - horizontal)",
+            "Spatial filter (receptor - horizontal)",
+            (w_offset, 2 * self.receptors.dim.H + h_offset),
+            font,
+            fontScale,
+            fontColor,
+            thickness,
+            lineType,
+        )
+
+        cv.putText(
+            image,
+            "Temporal filter (normalised input - exponential mean)",
             (self.receptors.dim.W + w_offset, h_offset),
             font,
             fontScale,
@@ -241,7 +246,7 @@ class Retina:
 
         cv.putText(
             image,
-            "Temporal running mean of normalised input",
+            "ON-type bipolar (spatial - temporal > 0)",
             (self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
             font,
             fontScale,
@@ -252,19 +257,8 @@ class Retina:
 
         cv.putText(
             image,
-            "ON-type bipolar (Ninput - Tmean > 0)",
-            (2 * self.receptors.dim.W + w_offset, h_offset),
-            font,
-            fontScale,
-            fontColor,
-            thickness,
-            lineType,
-        )
-
-        cv.putText(
-            image,
-            "OFF-type bipolar (Ninput - Tmean < 0)",
-            (2 * self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
+            "OFF-type bipolar (spatial - temporal < 0)",
+            (self.receptors.dim.W + w_offset, 2 * self.receptors.dim.H + h_offset),
             font,
             fontScale,
             fontColor,
@@ -275,7 +269,7 @@ class Retina:
         cv.putText(
             image,
             "ON-type ganglion",
-            (3 * self.receptors.dim.W + w_offset, h_offset),
+            (2 * self.receptors.dim.W + w_offset, h_offset),
             font,
             fontScale,
             fontColor,
@@ -286,7 +280,7 @@ class Retina:
         cv.putText(
             image,
             "OFF-type ganglion",
-            (3 * self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
+            (2 * self.receptors.dim.W + w_offset, self.receptors.dim.H + h_offset),
             font,
             fontScale,
             fontColor,
