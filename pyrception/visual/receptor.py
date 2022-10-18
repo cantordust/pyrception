@@ -67,6 +67,7 @@ class ReceptorLayer(ProtoLayer):
         sh: int = 1 / 8,
         sw: int = 1 / 8,
         kdist: KernelSizeDist = KernelSizeDist.Gaussian,
+        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
         decreasing: bool = True,
         smooth: bool = True,
     ):
@@ -108,7 +109,7 @@ class ReceptorLayer(ProtoLayer):
         # the size of the original input in each dimension.
         self.rf = self._make_rf(
             ksizes,
-            kwdist=KernelWeightDist.Proportional,
+            kwdist=kwdist,
         )
 
     @logger.catch

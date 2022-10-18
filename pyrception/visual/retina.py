@@ -174,7 +174,7 @@ class Retina:
         ganglion_views = [
             views[View.GanglionOnOff],
             views[View.GanglionOffOn],
-            pt.zeros_like(views[View.GanglionOffOn]),
+            views[View.OpticalFlow],
         ]
 
         receptor = np.vstack(

@@ -37,6 +37,7 @@ class GanglionLayer(ProtoLayer):
         sh: int = 1 / 8,
         sw: int = 1 / 8,
         kdist: KernelSizeDist = KernelSizeDist.Gaussian,
+        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
         decreasing: bool = False,
         smooth: bool = True,
     ):
@@ -73,14 +74,14 @@ class GanglionLayer(ProtoLayer):
         # Receptive fields.
         self.rf_centre = self._make_rf(
             centre_ksizes,
-            kwdist=KernelWeightDist.Gaussian,
-            # norm=True,
+            kwdist=kwdist,
+            norm=True,
         )
 
         self.rf_surround = self._make_rf(
             surround_ksizes,
-            kwdist=KernelWeightDist.Gaussian,
-            # norm=True,
+            kwdist=kwdist,
+            norm=True,
         )
 
     def process(
@@ -104,8 +105,7 @@ class GanglionLayer(ProtoLayer):
 
         # print(f"==[ onoffmax: {onoff.min()} - {onoff.max()}")
 
-        views[View.GanglionOnOff] = pt.where(on_center - off_surround > 0.0, 1.0, 0.0)
-        views[View.GanglionOffOn] = pt.where(off_center - on_surround > 0.0, 1.0, 0.0)
-        # views[View.OpticalFlow] =
-
+        views[View.GanglionOnOff] = pt.where(on_center - off_surround > 1, 1.0, 0.0)
+        views[View.GanglionOffOn] = pt.where(off_center - on_surround > 1, 1.0, 0.0)
+        views[View.OpticalFlow] = pt.zeros_like(views[View.GanglionOffOn])
         return views

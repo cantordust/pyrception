@@ -43,6 +43,7 @@ class BipolarLayer(ProtoLayer):
         sh: int = 1 / 8,
         sw: int = 1 / 8,
         kdist: KernelSizeDist = KernelSizeDist.Gaussian,
+        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
         decreasing: bool = False,
         smooth: bool = True,
     ):
@@ -84,7 +85,7 @@ class BipolarLayer(ProtoLayer):
         # Receptive fields.
         self.rf = self._make_rf(
             ksizes,
-            kwdist=KernelWeightDist.Proportional,
+            kwdist=kwdist,
         )
 
     @logger.catch
