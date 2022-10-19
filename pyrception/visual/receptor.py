@@ -28,17 +28,17 @@ import torch as pt
 import torch.nn.functional as ptf
 from torch.distributions.one_hot_categorical import OneHotCategorical
 
-pt.set_printoptions(edgeitems=20)
-
-
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelSizeDist
-from pyrception.visual.util.types import KernelWeightDist
+from pyrception.visual.util.types import (
+    View,
+    RFSizeDist,
+    RFType,
+    RFType,
+)
 from pyrception.visual.proto import ProtoLayer
 
 
@@ -66,8 +66,8 @@ class ReceptorLayer(ProtoLayer):
         mw: Optional[int] = None,
         sh: int = 1 / 8,
         sw: int = 1 / 8,
-        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
-        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
+        rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
+        rftype: RFType = RFType.CentreSurround,
         decreasing: bool = True,
         smooth: bool = True,
     ):
@@ -98,7 +98,7 @@ class ReceptorLayer(ProtoLayer):
             mw,
             sh,
             sw,
-            kdist,
+            rfsizedist,
             decreasing,
             smooth,
         )
@@ -109,7 +109,7 @@ class ReceptorLayer(ProtoLayer):
         # the size of the original input in each dimension.
         self.rf = self._make_rf(
             ksizes,
-            kwdist=kwdist,
+            rftype=rftype,
         )
 
     @logger.catch

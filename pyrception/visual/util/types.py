@@ -22,7 +22,7 @@ class View(enum.Enum):
     OpticalFlow = enum.auto()
 
 
-class KernelSizeDist(enum.Enum):
+class RFSizeDist(enum.Enum):
     """
     Kernel size distribution type
     for building receptive fields.
@@ -33,12 +33,13 @@ class KernelSizeDist(enum.Enum):
     LogPolar = enum.auto()
 
 
-class KernelWeightDist(enum.Enum):
+class RFType(enum.Enum):
     """
-    Kernel weight distribution type
+    Receptive field organisation
     for building receptive fields.
     """
 
-    Flat = enum.auto()
-    Gaussian = enum.auto()
+    CentreSurround = enum.auto()
     Proportional = enum.auto()
+    Gabor = enum.auto()
+    Flat = enum.auto()

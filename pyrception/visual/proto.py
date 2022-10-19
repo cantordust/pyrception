@@ -35,9 +35,12 @@ import cv2 as cv
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelSizeDist
-from pyrception.visual.util.types import KernelWeightDist
+from pyrception.visual.util.types import (
+    View,
+    RFSizeDist,
+    RFType,
+    RFType,
+)
 
 
 class ProtoLayer:
@@ -60,13 +63,13 @@ class ProtoLayer:
         return x, y
 
     @staticmethod
-    def _kdist_gaussian(
+    def _2d_gaussian(
         h: int,
         w: int,
-        mh: int,
-        mw: int,
-        sh: int = 1 / 16,
-        sw: int = 1 / 16,
+        mh: float,
+        mw: float,
+        sh: float = 1 / 16,
+        sw: float = 1 / 16,
         decreasing: bool = True,
         norm: bool = False,
     ) -> np.ndarray:
@@ -83,17 +86,35 @@ class ProtoLayer:
         return dist if decreasing else 1 - dist
 
     @staticmethod
-    def _kdist_logpolar(
+    def _2d_logpolar(
         h: int,
         w: int,
-        sh: int = 1 / 16,
-        sw: int = 1 / 16,
+        sh: float = 1 / 16,
+        sw: float = 1 / 16,
         decreasing: bool = True,
     ):
         x, y = ProtoLayer._make_mesh(h, w)
         dist = pt.log1p(1.0 + pt.sqrt(sh * (x - h // 2) ** 2 + sw * (y - w // 2) ** 2))
 
         return 1 / (1 + dist) if decreasing else dist
+
+    @staticmethod
+    def _2d_gabor(
+        ksize: int,
+        sd: float = 1 / 2,
+        theta: float = 0.0,
+        lamda: float = 1.0,
+        gamma: float = 0.1,
+        phi: float = 0.0,
+    ):
+
+        sd *= ksize
+        theta *= math.pi / 180
+        lamda *= ksize
+        gamma = 0.1
+        phi = 0.0
+
+        return cv.getGaborKernel((ksize, ksize), sd, theta, lamda, gamma, phi)
 
     @staticmethod
     def _kdist_flat(
@@ -155,7 +176,7 @@ class ProtoLayer:
         mw: Optional[int] = None,
         sh: Optional[int] = 1 / 16,
         sw: Optional[int] = 1 / 16,
-        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
+        kdist: RFSizeDist = RFSizeDist.Gaussian,
         decreasing: bool = True,
         smooth: bool = True,
     ):
@@ -166,19 +187,19 @@ class ProtoLayer:
         if mw is None:
             mw = w // 2
 
-        if kdist == KernelSizeDist.Flat:
+        if kdist == RFSizeDist.Flat:
             # * Flat kernel distribution * #
             kdist = ProtoLayer._kdist_flat(h, w)
             ksizes = kdist * k_min
 
         else:
-            if kdist == KernelSizeDist.LogPolar:
+            if kdist == RFSizeDist.LogPolar:
                 # * Log-polar kernel distribution * #
-                kdist = ProtoLayer._kdist_logpolar(h, w, sh, sw, decreasing)
+                kdist = ProtoLayer._2d_logpolar(h, w, sh, sw, decreasing)
 
-            elif kdist == KernelSizeDist.Gaussian:
+            elif kdist == RFSizeDist.Gaussian:
                 # * Gaussian kernel distribution * #
-                kdist = ProtoLayer._kdist_gaussian(h, w, mh, mw, sh, sw, decreasing)
+                kdist = ProtoLayer._2d_gaussian(h, w, mh, mw, sh, sw, decreasing)
 
             ksizes = ProtoLayer.scale(kdist, k_min, k_max)
 
@@ -360,10 +381,67 @@ class ProtoLayer:
 
         return folded
 
+    def _make_rf_centre_surround(
+        self,
+        ksize: int,
+        scale: float,
+        norm: bool,
+        rows: pt.Tensor,
+        boundary_mask: pt.Tensor,
+    ):
+
+        mean = ksize // 2
+
+        if ksize % 2 == 0:
+            mean -= 0.5
+
+        kvals = ProtoLayer._2d_gaussian(
+            ksize,
+            ksize,
+            mean,
+            mean,
+            norm=norm,
+        )
+
+        return (kvals.repeat(len(rows), 1).flatten()[boundary_mask] * scale).tolist()
+
+    def _make_rf_gabor(
+        self,
+        ksize: pt.Tensor,
+        theta: float,
+        rows: pt.Tensor,
+        boundary_mask: pt.Tensor,
+    ):
+
+        kvals = ProtoLayer._2d_gabor(
+            ksize,
+            theta=theta,
+        )
+
+        return (kvals.repeat(len(rows), 1).flatten()[boundary_mask]).tolist()
+
+    def _make_rf_proportional(
+        self,
+        ksize: int,
+        scale: float,
+        sp_rows: pt.Tensor,
+    ):
+
+        val = (1 / ksize**2) * scale
+        return [val] * sp_rows.shape[0]
+
+    def _make_rf_flat(
+        self,
+        scale: float,
+        sp_rows: pt.Tensor,
+    ):
+
+        return [scale] * sp_rows.shape[0]
+
     def _make_rf(
         self,
         ksizes: pt.Tensor,
-        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
+        rftype: RFType = RFType.CentreSurround,
         scale: float = 1.0,
         norm: bool = False,
     ):
@@ -430,32 +508,35 @@ class ProtoLayer:
             rf_rows.extend(sp_rows.tolist())
             rf_cols.extend(sp_cols.tolist())
 
-            if kwdist == KernelWeightDist.Gaussian:
+            if rftype == RFType.CentreSurround:
 
-                mean = ksize // 2
-
-                if ksize % 2 == 0:
-                    mean -= 0.5
-
-                kvals = ProtoLayer._kdist_gaussian(
+                kvals = self._make_rf_centre_surround(
                     ksize,
-                    ksize,
-                    mean,
-                    mean,
-                    norm=norm,
+                    scale,
+                    norm,
+                    rows,
+                    boundary_mask,
                 )
 
-                kvals = (
-                    kvals.repeat(len(rows), 1).flatten()[boundary_mask] * scale
-                ).tolist()
+            elif rftype == RFType.Gabor:
+                kvals = self._make_rf_gabor(
+                    rftype,
+                )
 
-            elif kwdist == KernelWeightDist.Proportional:
+            elif rftype == RFType.Proportional:
 
-                val = (1 / ksize**2) * scale
-                kvals = [val] * sp_rows.shape[0]
+                kvals = self._make_rf_proportional(
+                    ksize,
+                    scale,
+                    sp_rows,
+                )
 
             else:
-                kvals = [scale] * sp_rows.shape[0]
+
+                kvals = self._make_rf_flat(
+                    scale,
+                    sp_rows,
+                )
 
             rf_vals.extend(kvals)
 

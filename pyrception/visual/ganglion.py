@@ -13,9 +13,12 @@ import torch.functional as ptf
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelSizeDist
-from pyrception.visual.util.types import KernelWeightDist
+from pyrception.visual.util.types import (
+    View,
+    RFSizeDist,
+    RFType,
+    RFType,
+)
 from pyrception.visual.bipolar import BipolarLayer
 from pyrception.visual.proto import ProtoLayer
 
@@ -36,8 +39,8 @@ class GanglionLayer(ProtoLayer):
         mw: Optional[int] = None,
         sh: int = 1 / 8,
         sw: int = 1 / 8,
-        kdist: KernelSizeDist = KernelSizeDist.Gaussian,
-        kwdist: KernelWeightDist = KernelWeightDist.Gaussian,
+        rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
+        rftype: RFType = RFType.CentreSurround,
         decreasing: bool = False,
         smooth: bool = True,
     ):
@@ -64,7 +67,7 @@ class GanglionLayer(ProtoLayer):
             mw,
             sh,
             sw,
-            kdist,
+            rfsizedist,
             decreasing,
             smooth,
         )
@@ -74,13 +77,13 @@ class GanglionLayer(ProtoLayer):
         # Receptive fields.
         self.rf_centre = self._make_rf(
             centre_ksizes,
-            kwdist=kwdist,
+            rftype=rftype,
             norm=True,
         )
 
         self.rf_surround = self._make_rf(
             surround_ksizes,
-            kwdist=kwdist,
+            rftype=rftype,
             norm=True,
         )
 
@@ -103,9 +106,8 @@ class GanglionLayer(ProtoLayer):
         on_surround = self._convolve(on, self.rf_surround, self.dim.H, self.dim.W)
         off_surround = self._convolve(off, self.rf_surround, self.dim.H, self.dim.W)
 
-        # print(f"==[ onoffmax: {onoff.min()} - {onoff.max()}")
-
         views[View.GanglionOnOff] = pt.where(on_center - off_surround > 1, 1.0, 0.0)
         views[View.GanglionOffOn] = pt.where(off_center - on_surround > 1, 1.0, 0.0)
-        views[View.OpticalFlow] = pt.zeros_like(views[View.GanglionOffOn])
+        views[View.OpticalFlow] = on_center - off_surround
+
         return views
