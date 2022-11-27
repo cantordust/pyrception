@@ -1,11 +1,13 @@
-# ------------------------------------------------------------------------------
-# Imports
-# ------------------------------------------------------------------------------
+from typing import Set
+from typing import Dict
 from typing import Tuple
 from typing import Optional
 
 # --------------------------------------
 from loguru import logger
+
+# --------------------------------------
+from pathlib import Path
 
 # --------------------------------------
 import torch as pt
@@ -32,7 +34,7 @@ class GanglionLayer(ProtoLayer):
     def __init__(
         self,
         source: BipolarLayer,
-        saccades: bool = False,
+        saccades: bool,
         k_min: int = 1,
         k_max: int = 9,
         mh: Optional[int] = None,
@@ -43,9 +45,11 @@ class GanglionLayer(ProtoLayer):
         rftype: RFType = RFType.CentreSurround,
         decreasing: bool = False,
         smooth: bool = True,
+        layer_name: str = "Ganglion",
     ):
 
-        # Ganglion cells.
+        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
+
         self.source = source
 
         # Dimensions and resize flag
@@ -55,8 +59,6 @@ class GanglionLayer(ProtoLayer):
             source.dim.W,
             saccades,
         )
-
-        logger.info(f"==[ ganglion ] dim: {self.dim}")
 
         (_, centre_ksizes) = self.get_kdist(
             self.dim.H,
@@ -72,7 +74,8 @@ class GanglionLayer(ProtoLayer):
             smooth,
         )
 
-        surround_ksizes = (centre_ksizes * 2 - 1).int()
+        surround_ksizes = (centre_ksizes * 2 + 1).int()
+        # surround_ksizes = centre_ksizes
 
         # Receptive fields.
         self.rf_centre = self._make_rf(
@@ -87,10 +90,15 @@ class GanglionLayer(ProtoLayer):
             norm=True,
         )
 
+        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
+
     def process(
         self,
-        on: pt.Tensor,
-        off: pt.Tensor,
+        views: Dict[View, pt.Tensor],
+        n_frame: int,
+        save_frames: Set[int],
+        save_views: Set[View],
+        frame_paths: Optional[Dict[View, Path]],
     ) -> pt.Tensor:
         """
         Compute the activation of ON/OFF and OFF/ON RGCs.
@@ -98,7 +106,10 @@ class GanglionLayer(ProtoLayer):
         This is where spikes are produced.
         """
 
-        views = {}
+        _views = {}
+
+        on = views[View.BipolarOn]
+        off = views[View.BipolarOff]
 
         on_center = self._convolve(on, self.rf_centre, self.dim.H, self.dim.W)
         off_center = self._convolve(off, self.rf_centre, self.dim.H, self.dim.W)
@@ -106,8 +117,17 @@ class GanglionLayer(ProtoLayer):
         on_surround = self._convolve(on, self.rf_surround, self.dim.H, self.dim.W)
         off_surround = self._convolve(off, self.rf_surround, self.dim.H, self.dim.W)
 
-        views[View.GanglionOnOff] = pt.where(on_center - off_surround > 1, 1.0, 0.0)
-        views[View.GanglionOffOn] = pt.where(off_center - on_surround > 1, 1.0, 0.0)
-        views[View.OpticalFlow] = on_center - off_surround
+        threshold = 15
 
-        return views
+        _views[View.GanglionOnOff] = pt.where(
+            on_center - off_surround > threshold, 1.0, 0.0
+        )
+        _views[View.GanglionOffOn] = pt.where(
+            off_center - on_surround > threshold, 1.0, 0.0
+        )
+        _views[View.OnOffEvents] = on - off
+
+        if n_frame in save_frames:
+            self._save_views(_views, n_frame, save_views, frame_paths)
+
+        views.update(_views)

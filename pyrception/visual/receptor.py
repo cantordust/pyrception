@@ -1,6 +1,5 @@
-# ------------------------------------------------------------------------------
-# Imports
-# ------------------------------------------------------------------------------
+from typing import Set
+from typing import Dict
 from typing import Tuple
 from typing import Optional
 
@@ -13,7 +12,6 @@ import numpy as np
 # --------------------------------------
 import math
 
-
 # --------------------------------------
 import enum
 
@@ -22,6 +20,9 @@ import matplotlib.pyplot as plt
 
 # --------------------------------------
 from dotmap import DotMap
+
+# --------------------------------------
+from pathlib import Path
 
 # --------------------------------------
 import torch as pt
@@ -56,9 +57,9 @@ class ReceptorLayer(ProtoLayer):
     def __init__(
         self,
         original_shape: pt.Tensor,
-        scaled_height: Optional[int] = None,
-        scaled_width: Optional[int] = None,
-        saccades: bool = False,
+        scaled_height: Optional[int],
+        scaled_width: Optional[int],
+        saccades: bool,
         mode: Optional[enum.Enum] = cv.COLOR_RGB2GRAY,
         k_min: int = 1,
         k_max: int = 15,
@@ -70,7 +71,9 @@ class ReceptorLayer(ProtoLayer):
         rftype: RFType = RFType.CentreSurround,
         decreasing: bool = True,
         smooth: bool = True,
+        layer_name: str = "Receptor",
     ):
+        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
 
         # Dimensions and resize flag
         self.dim = self._compute_dimensions(
@@ -79,8 +82,6 @@ class ReceptorLayer(ProtoLayer):
             scaled_width,
             saccades,
         )
-
-        logger.info(f"==[ receptor ] dim: {self.dim}")
 
         # Create a flatmask
         self.flatmask = self.make_flatmask(mode)
@@ -111,6 +112,8 @@ class ReceptorLayer(ProtoLayer):
             ksizes,
             rftype=rftype,
         )
+
+        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
 
     @logger.catch
     def make_flatmask(
@@ -161,7 +164,12 @@ class ReceptorLayer(ProtoLayer):
     def process(
         self,
         frame: pt.Tensor,
-        offset: Optional[Tuple[float, float]] = None,
+        offset: Optional[Tuple[float, float]],
+        views: Dict[View, pt.Tensor],
+        n_frame: int,
+        save_frames: Set[int],
+        save_views: Set[View],
+        frame_paths: Optional[Dict[View, Path]],
     ) -> pt.Tensor:
         """
         Read the input by applying a certain offset:
@@ -171,7 +179,7 @@ class ReceptorLayer(ProtoLayer):
         - Compute the local contrast normalisation.
         """
 
-        views = {View.Original: frame}
+        _views = {View.Original: frame}
 
         # Flatten the frame
         if self.flatmask is not None:
@@ -189,10 +197,13 @@ class ReceptorLayer(ProtoLayer):
         if offset is not None:
             mean = self.unpad(mean, padding)
 
-        views[View.ReceptorMean] = mean
+        _views[View.ReceptorMean] = mean
 
         # Subtract the mean and scale
         adapted = frame - mean
-        views[View.ReceptorAdapted] = adapted
+        _views[View.ReceptorAdapted] = adapted
 
-        return views
+        if n_frame in save_frames:
+            self._save_views(_views, n_frame, save_views, frame_paths)
+
+        views.update(_views)

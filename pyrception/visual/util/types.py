@@ -1,6 +1,3 @@
-# ------------------------------------------------------------------------------
-# Imports
-# ------------------------------------------------------------------------------
 import enum
 
 
@@ -9,7 +6,6 @@ class View(enum.Enum):
     Frame views for visual input.
     """
 
-    Debug = enum.auto()
     Original = enum.auto()
     ReceptorMean = enum.auto()
     ReceptorPadded = enum.auto()
@@ -17,9 +13,11 @@ class View(enum.Enum):
     BipolarMean = enum.auto()
     BipolarOn = enum.auto()
     BipolarOff = enum.auto()
+    BipolarCombined = enum.auto()
     GanglionOnOff = enum.auto()
     GanglionOffOn = enum.auto()
-    OpticalFlow = enum.auto()
+    Composite = enum.auto()
+    OnOffEvents = enum.auto()
 
 
 class RFSizeDist(enum.Enum):

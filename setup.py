@@ -1,6 +1,3 @@
-# ------------------------------------------------------------------------------
-# Imports
-# ------------------------------------------------------------------------------
 from distutils.core import setup
 
 # --------------------------------------
@@ -20,6 +17,7 @@ setup(
     version=f"{Version.major}.{Version.minor}.{Version.patch}",
     packages=["pyrception"],
     install_requires=[
+        "imageio",
         "loguru",
         "python-decouple",
         "torch",

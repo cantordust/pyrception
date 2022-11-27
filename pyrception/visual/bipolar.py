@@ -1,6 +1,5 @@
-# ------------------------------------------------------------------------------
-# Imports
-# ------------------------------------------------------------------------------
+from typing import Set
+from typing import Dict
 from typing import Tuple
 from typing import Optional
 
@@ -8,7 +7,7 @@ from typing import Optional
 from loguru import logger
 
 # --------------------------------------
-import random
+from pathlib import Path
 
 # --------------------------------------
 import torch as pt
@@ -37,7 +36,7 @@ class BipolarLayer(ProtoLayer):
     def __init__(
         self,
         source: ReceptorLayer,
-        saccades: bool = False,
+        saccades: bool,
         alpha: float = 0.1,
         k_min: int = 1,
         k_max: int = 11,
@@ -49,7 +48,10 @@ class BipolarLayer(ProtoLayer):
         rftype: RFType = RFType.CentreSurround,
         decreasing: bool = False,
         smooth: bool = True,
+        layer_name: str = "Bipolar",
     ):
+
+        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
 
         self.source = source
 
@@ -60,8 +62,6 @@ class BipolarLayer(ProtoLayer):
             source.dim.W,
             saccades,
         )
-
-        logger.info(f"==[ bipolar ] dim : {self.dim}")
 
         self.alpha = alpha
 
@@ -91,10 +91,16 @@ class BipolarLayer(ProtoLayer):
             rftype=rftype,
         )
 
+        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
+
     @logger.catch
     def process(
         self,
-        frame: pt.Tensor,
+        views: Dict[View, pt.Tensor],
+        n_frame: int,
+        save_frames: Set[int],
+        save_views: Set[View],
+        frame_paths: Optional[Dict[View, Path]],
     ) -> pt.Tensor:
         """
         Compute the offset from the running mean
@@ -103,21 +109,28 @@ class BipolarLayer(ProtoLayer):
         These define the ON and OFF channels.
         """
 
-        # Update the internal state
+        _views = {}
 
-        views = {
-            View.BipolarMean: self.tmean,
-        }
-
-        frame = self._convolve(frame, self.rf, self.dim.H, self.dim.W)
+        frame = self._convolve(
+            views[View.ReceptorAdapted],
+            self.rf,
+            self.dim.H,
+            self.dim.W,
+        )
         diff = frame - self.tmean
 
-        views[View.BipolarOn] = ptf.relu(diff)
-        views[View.BipolarOff] = ptf.relu(-diff)
+        _views[View.BipolarOn] = ptf.relu(diff)
+        _views[View.BipolarOff] = ptf.relu(-diff)
+        _views[View.BipolarCombined] = diff
 
         # Update the running mean
         self.tmean += self.alpha * diff
 
-        # print(f"==[ self.tmean:\n{self.tmean} ({self.tmean.shape})")
+        _views[View.BipolarMean] = self.tmean
 
-        return views
+        if n_frame in save_frames:
+            self._save_views(_views, n_frame, save_views, frame_paths)
+
+        views.update(_views)
+
+        # print(f"==[ self.tmean:\n{self.tmean} ({self.tmean.shape})")

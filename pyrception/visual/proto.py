@@ -1,6 +1,3 @@
-# ------------------------------------------------------------------------------
-# Imports
-# ------------------------------------------------------------------------------
 from __future__ import annotations
 
 # --------------------------------------
@@ -12,6 +9,9 @@ from typing import Union
 from typing import Optional
 
 # --------------------------------------
+from pathlib import Path
+
+# --------------------------------------
 from loguru import logger
 
 # --------------------------------------
@@ -19,9 +19,6 @@ import numpy as np
 
 # --------------------------------------
 import math
-
-# --------------------------------------
-from matplotlib import pyplot as plt
 
 # --------------------------------------
 from dotmap import DotMap
@@ -236,6 +233,37 @@ class ProtoLayer:
             padding[2] : -padding[3],
             padding[0] : -padding[1],
         ]
+
+    def __del__(self):
+        # TODO Add code for releasing individual
+        # VideoWriter sinks for different views.
+        pass
+
+    def _as_image(
+        self,
+        frame: np.ndarray,
+    ):
+
+        fmin = frame.min()
+
+        return 255 * (frame - fmin) / (frame.max() - fmin + 1e-8)
+
+    def _save_views(
+        self,
+        views: Dict[View, np.ndarray],
+        n_frame: int,
+        save_views: Set[View],
+        frame_paths: Optional[Dict[View, Path]],
+    ):
+
+        for view, frm in views.items():
+
+            if view in save_views:
+                fname = str(frame_paths[view] / f"{n_frame:>06d}.png")
+
+                asimage = self._as_image(frm.numpy())
+
+                cv.imwrite(fname, asimage)
 
     def _get_padding(
         self,
@@ -521,6 +549,7 @@ class ProtoLayer:
             elif rftype == RFType.Gabor:
                 kvals = self._make_rf_gabor(
                     rftype,
+                    boundary_mask=boundary_mask,
                 )
 
             elif rftype == RFType.Proportional:
