@@ -5,7 +5,6 @@ from enum import IntEnum
 
 
 class Version(IntEnum):
-
     major = 0
     minor = 0
     patch = 2
@@ -16,16 +15,7 @@ setup(
     author="Alexander Hadjiivanov",
     version=f"{Version.major}.{Version.minor}.{Version.patch}",
     packages=["pyrception"],
-    install_requires=[
-        "imageio",
-        "loguru",
-        "python-decouple",
-        "torch",
-        "numpy",
-        "dotmap",
-        "opencv-python",
-        "matplotlib",
-    ],
+    install_requires=[],
     license="MIT",
     long_description=open("README.md").read(),
 )

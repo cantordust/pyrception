@@ -18,12 +18,11 @@ from pyrception import conf
 from pyrception.visual.util.types import (
     View,
     RFSizeDist,
-    RFType,
-    RFType,
+    KernelType,
+    KernelType,
 )
 from pyrception.visual.proto import ProtoLayer
 from pyrception.visual.receptor import ReceptorLayer
-
 
 class BipolarLayer(ProtoLayer):
 
@@ -45,7 +44,7 @@ class BipolarLayer(ProtoLayer):
         sh: int = 1 / 8,
         sw: int = 1 / 8,
         rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
-        rftype: RFType = RFType.CentreSurround,
+        rftype: KernelType = KernelType.Proportional,
         decreasing: bool = False,
         smooth: bool = True,
         layer_name: str = "Bipolar",
@@ -71,10 +70,10 @@ class BipolarLayer(ProtoLayer):
             self.dim.W,
         )
 
-        (self.kmask, ksizes) = self.get_kdist(
+        (self.kmask, ksizes) = self.make_rfs(
             self.dim.H,
             self.dim.W,
-            k_min,
+m            k_min,
             k_max,
             mh,
             mw,

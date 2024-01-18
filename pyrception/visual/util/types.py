@@ -19,25 +19,12 @@ class View(enum.Enum):
     Composite = enum.auto()
     OnOffEvents = enum.auto()
 
-
-class RFSizeDist(enum.Enum):
-    """
-    Kernel size distribution type
-    for building receptive fields.
-    """
-
-    Flat = enum.auto()
-    Gaussian = enum.auto()
-    LogPolar = enum.auto()
-
-
-class RFType(enum.Enum):
+class KernelType(enum.Enum):
     """
     Receptive field organisation
     for building receptive fields.
     """
 
-    CentreSurround = enum.auto()
     Proportional = enum.auto()
+    Gaussian = enum.auto()
     Gabor = enum.auto()
-    Flat = enum.auto()

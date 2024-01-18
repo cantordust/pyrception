@@ -6,7 +6,7 @@ from pathlib import Path
 # --------------------------------------
 from pyrception.util.functions import curdir
 from pyrception.visual.util.types import RFSizeDist
-from pyrception.visual.util.types import RFType
+from pyrception.visual.util.types import KernelType
 from pyrception.visual.retina import Retina
 
 
@@ -20,7 +20,7 @@ def run(source: Union[str, int]):
         saccades=saccades,
         receptor_args={
             "rfsizedist": RFSizeDist.Flat,
-            "rftype": RFType.Proportional,
+            "rftype": KernelType.Proportional,
             "sh": 0.5,
             "sw": 0.5,
             "k_min": 3,
@@ -29,7 +29,7 @@ def run(source: Union[str, int]):
         bipolar_args={
             "alpha": 0.9,
             "rfsizedist": RFSizeDist.Flat,
-            "rftype": RFType.Flat,
+            "rftype": KernelType.Proportional,
             "sh": 0.5,
             "sw": 0.5,
             "k_min": 3,
@@ -37,7 +37,7 @@ def run(source: Union[str, int]):
         },
         ganglion_args={
             "rfsizedist": RFSizeDist.Flat,
-            "rftype": RFType.Proportional,
+            "rftype": KernelType.Proportional,
             "sh": 0.5,
             "sw": 0.5,
             "k_min": 3,

@@ -7,38 +7,24 @@ from typing import Optional
 from loguru import logger
 
 # --------------------------------------
-import numpy as np
-
-# --------------------------------------
-import math
-
-# --------------------------------------
 import enum
-
-# --------------------------------------
-import matplotlib.pyplot as plt
-
-# --------------------------------------
-from dotmap import DotMap
 
 # --------------------------------------
 from pathlib import Path
 
 # --------------------------------------
 import torch as pt
-import torch.nn.functional as ptf
 from torch.distributions.one_hot_categorical import OneHotCategorical
 
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
-from pyrception import conf
 from pyrception.visual.util.types import (
     View,
     RFSizeDist,
-    RFType,
-    RFType,
+    KernelType,
+    KernelType,
 )
 from pyrception.visual.proto import ProtoLayer
 
@@ -68,7 +54,7 @@ class ReceptorLayer(ProtoLayer):
         sh: int = 1 / 8,
         sw: int = 1 / 8,
         rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
-        rftype: RFType = RFType.CentreSurround,
+        rftype: KernelType = KernelType.Proportional,
         decreasing: bool = True,
         smooth: bool = True,
         layer_name: str = "Receptor",
@@ -90,7 +76,7 @@ class ReceptorLayer(ProtoLayer):
         if self.flatmask is not None:
             self.dim.D = 1
 
-        (self.kmask, ksizes) = self.get_kdist(
+        (self.kmask, ksizes) = self.make_rfs(
             self.dim.padded.H,
             self.dim.padded.W,
             k_min,
@@ -174,9 +160,9 @@ class ReceptorLayer(ProtoLayer):
         """
         Read the input by applying a certain offset:
         - Read the next frame
-            - (Optional) flatten the frame (remove all channel information)
-        - Get the input padding corresponding to the specified offset
-        - Compute the local contrast normalisation.
+        - (Optional) flatten the frame (remove all channel information)
+        - Get the input padding corresponding to the specified offset (only if saccades are active)
+        - Compute the local contrast normalisation (horizontal cell effect).
         """
 
         _views = {View.Original: frame}

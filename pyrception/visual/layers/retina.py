@@ -77,7 +77,6 @@ class Retina(ProtoLayer):
         self.processing = True
 
         if isinstance(source, str):
-
             self.src_path = Path(source).absolute()
 
             print(f"==[ self.src_path: {self.src_path}")
@@ -149,7 +148,6 @@ class Retina(ProtoLayer):
         logger.info("Press ESC to quit.")
 
     def __del__(self):
-
         self.processing = False
 
         if self.stream is not None:
@@ -161,14 +159,12 @@ class Retina(ProtoLayer):
         cv.destroyAllWindows()
 
     def _iterate_frames(self):
-
         for file in sorted(self.src_path.iterdir()):
             # print(f"==[ file.name: {file.name}")
             if file.is_file() and file.suffix in (".png", ".jpg", ".jpeg"):
                 yield iio.imread(file)
 
     def _read_frame_file(self):
-
         try:
             frame = next(self.generator)
         except StopIteration:
@@ -216,7 +212,6 @@ class Retina(ProtoLayer):
         self,
         views: Set[pt.Tensor],
     ):
-
         if len(views) == 0:
             return
 
@@ -238,32 +233,29 @@ class Retina(ProtoLayer):
             pt.zeros_like(views[View.GanglionOffOn]),
         ]
 
-        receptor = np.vstack(
-            [ProtoLayer.scale(view).numpy() for view in receptor_views]
-        ).astype(np.uint8)
+        receptor = np.vstack([ProtoLayer.scale(view).numpy() for view in receptor_views]).astype(np.uint8)
 
-        bipolar = np.vstack(
-            [ProtoLayer.scale(view).numpy() for view in bipolar_views]
-        ).astype(np.uint8)
+        bipolar = np.vstack([ProtoLayer.scale(view).numpy() for view in bipolar_views]).astype(np.uint8)
 
-        ganglion = np.vstack(
-            [ProtoLayer.scale(view).numpy() for view in ganglion_views]
-        ).astype(np.uint8)
+        ganglion = np.vstack([ProtoLayer.scale(view).numpy() for view in ganglion_views]).astype(np.uint8)
 
         image = np.hstack((receptor, bipolar, ganglion))
         cimage = cv.merge((image, image, image))
 
-        # Optical flow
-        events = pt.zeros(*views[View.OnOffEvents].shape, 3)
-        events[:, :, 0] = pt.relu(views[View.GanglionOnOff])
-        events[:, :, 2] = pt.relu(views[View.GanglionOffOn])
+        # Combined ON/OFF and OFF/ON
+        events = pt.ones(*views[View.OnOffEvents].shape, 1) * 127
+        on_off = pt.relu(views[View.GanglionOnOff])
+        off_on = pt.relu(views[View.GanglionOffOn])
+        events[on_off == 1] = 0
+        events[off_on == 1] = 255
 
-        events = 255 * (events - events.min()) / (events.max() - events.min() + 1e-8)
-        views[View.OnOffEvents] = events
+        # events[:, :, 0] = on_off
+        # events[:, :, 2] = off_on
 
-        cimage[
-            2 * cimage.shape[0] // 3 :, 2 * cimage.shape[1] // 3 :, :
-        ] = events.numpy().astype(np.uint8)
+        # events = 255 * (events - events.min()) / (events.max() - events.min() + 1e-8)
+        # views[View.OnOffEvents] = events
+
+        cimage[2 * cimage.shape[0] // 3 :, 2 * cimage.shape[1] // 3 :, :] = events.numpy().astype(np.uint8)
 
         font = cv.FONT_HERSHEY_SIMPLEX
         fontScale = 0.45
@@ -276,8 +268,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "Raw signal (receptor)",
-            "(a)",
+            "Raw signal (receptor)",
+            # "(a)",
             (w_offset, h_offset),
             font,
             fontScale,
@@ -288,8 +280,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "Local mean (horizontal)",
-            "(b)",
+            "Local mean (horizontal)",
+            # "(b)",
             (w_offset, self.receptor.dim.H + h_offset),
             font,
             fontScale,
@@ -300,8 +292,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "Spatial filter",
-            "(c)",
+            "Spatial filter",
+            # "(c)",
             (w_offset, 2 * self.receptor.dim.H + h_offset),
             font,
             fontScale,
@@ -312,8 +304,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "Temporal filter",
-            "(d)",
+            "Temporal filter",
+            # "(d)",
             (self.receptor.dim.W + w_offset, h_offset),
             font,
             fontScale,
@@ -324,8 +316,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "ON-type bipolar",
-            "(e)",
+            "ON-type bipolar",
+            # "(e)",
             (self.receptor.dim.W + w_offset, self.receptor.dim.H + h_offset),
             font,
             fontScale,
@@ -336,8 +328,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "OFF-type bipolar",
-            "(f)",
+            "OFF-type bipolar",
+            # "(f)",
             (self.receptor.dim.W + w_offset, 2 * self.receptor.dim.H + h_offset),
             font,
             fontScale,
@@ -348,8 +340,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "ON-centre/OFF-surround ganglion",
-            "(g)",
+            "ON-centre/OFF-surround ganglion",
+            # "(g)",
             (2 * self.receptor.dim.W + w_offset, h_offset),
             font,
             fontScale,
@@ -360,8 +352,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "OFF-centre/ON-surround ganglion",
-            "(h)",
+            "OFF-centre/ON-surround ganglion",
+            # "(h)",
             (2 * self.receptor.dim.W + w_offset, self.receptor.dim.H + h_offset),
             font,
             fontScale,
@@ -372,8 +364,8 @@ class Retina(ProtoLayer):
 
         cv.putText(
             cimage,
-            # "ON/OFF (blue) and OFF/ON (red) events",
-            "(i)",
+            "ON/OFF (black) and OFF/ON (white) events",
+            # "(i)",
             (2 * self.receptor.dim.W + w_offset, 2 * self.receptor.dim.H + h_offset),
             font,
             fontScale,
@@ -393,7 +385,6 @@ class Retina(ProtoLayer):
         save_views: Optional[Dict[View, Optional[Path]]] = None,
         save_video: bool = False,
     ):
-
         if not saccades:
             saccades = None
 
@@ -412,7 +403,6 @@ class Retina(ProtoLayer):
         # * Paths for saving frames and video * #
 
         if output_path is not None:
-
             output_path = Path(output_path).absolute()
             if Path.is_file(output_path):
                 output_path = output_path.parent
@@ -422,7 +412,6 @@ class Retina(ProtoLayer):
             output_path = dir / "output"
 
         if save_video or (save_frames is not None):
-
             # Current date and time
             now = dt.now().strftime("%d-%b-%Y_%H:%M:%S")
 
@@ -430,12 +419,10 @@ class Retina(ProtoLayer):
             root = output_path.absolute() / now
 
             if save_frames not in (None, False):
-
                 # Save each frame of each view as a separate file
                 frame_paths = {}
 
                 for view in save_views:
-
                     view_path = root / f"{view.name}/frames"
                     Path.mkdir(
                         view_path,
@@ -446,7 +433,6 @@ class Retina(ProtoLayer):
                     frame_paths[view] = view_path
 
             if save_video:
-
                 # Save the output as a video file
                 video_path = root / "video.mp4"
 
@@ -476,14 +462,12 @@ class Retina(ProtoLayer):
         save_all_frames = False
 
         if save_frames in (True, False, None):
-
             if save_frames == True:
                 save_all_frames = True
 
             save_frames = set()
 
         while True:
-
             if saccades and np.random.random() <= 0.05:
                 height_offset = (np.random.random(1) - 0.5) / 4
                 width_offset = (np.random.random(1) - 0.5) / 4
@@ -533,7 +517,6 @@ class Retina(ProtoLayer):
             cimage = self.compose(views)
 
             if show:
-
                 # Show all images
                 cv.imshow(f"Result", cimage)
 

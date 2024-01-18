@@ -1,0 +1,24 @@
+name: pyrception
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.10
+  - bokeh
+  - cpuonly
+  - dotmap
+  - h5py
+  - ipykernel
+  - loguru
+  - matplotlib
+  - numpy
+  - opencv
+  - pip
+  - python-decouple
+  - pytorch
+  - scikit-image
+  - scipy
+  - torchvision
+  - tqdm
+  - pip:
+    - -e .
