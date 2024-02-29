@@ -15,18 +15,14 @@ import torch.functional as ptf
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.visual.util.types import (
-    View,
-    RFSizeDist,
-    KernelType,
-    KernelType,
-)
-from pyrception.visual.bipolar import BipolarLayer
-from pyrception.visual.proto import ProtoLayer
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import KernelType
+from pyrception.visual.layers.bipolar import BipolarLayer
+from pyrception.visual.layers.amacrine import AmacrineLayer
+from pyrception.visual.layers.proto import ProtoLayer
 
 
 class GanglionLayer(ProtoLayer):
-
     """
     A layer of ON- and OFF-type RGCs.
     """
@@ -41,7 +37,6 @@ class GanglionLayer(ProtoLayer):
         mw: Optional[int] = None,
         sh: int = 1 / 8,
         sw: int = 1 / 8,
-        rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
         rftype: KernelType = KernelType.Proportional,
         decreasing: bool = False,
         smooth: bool = True,
@@ -60,7 +55,7 @@ class GanglionLayer(ProtoLayer):
             saccades,
         )
 
-        (_, centre_ksizes) = self.make_rfs(
+        (_, centre_ksizes) = self._make_rfs(
             self.dim.H,
             self.dim.W,
             k_min,
@@ -69,7 +64,6 @@ class GanglionLayer(ProtoLayer):
             mw,
             sh,
             sw,
-            rfsizedist,
             decreasing,
             smooth,
         )

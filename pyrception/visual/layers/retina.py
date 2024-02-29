@@ -1,8 +1,4 @@
-from typing import Any
-from typing import Set
-from typing import Dict
-from typing import Union
-from typing import Optional
+from typing import *
 
 # --------------------------------------
 from loguru import logger
@@ -28,13 +24,13 @@ import cv2 as cv
 # --------------------------------------
 from pyrception import conf
 from pyrception.visual.util.types import View
-from pyrception.visual.proto import ProtoLayer
-from pyrception.visual.receptor import ReceptorLayer
-from pyrception.visual.bipolar import BipolarLayer
-from pyrception.visual.ganglion import GanglionLayer
+from pyrception.visual.layers.proto import ProtoLayer
+from pyrception.visual.layers.receptor import ReceptorLayer
+from pyrception.visual.layers.bipolar import BipolarLayer
+from pyrception.visual.layers.ganglion import GanglionLayer
 
 
-class Retina(ProtoLayer):
+class Retina:
 
     """
     A retinal layer aims to emulate the operation of the retina
@@ -44,36 +40,40 @@ class Retina(ProtoLayer):
     def __init__(
         self,
         source: Union[str, int],
-        scaled_height: Optional[int] = None,
-        scaled_width: Optional[int] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
         saccades: bool = False,
         receptor_args: Optional[Dict[str, Any]] = None,
         bipolar_args: Optional[Dict[str, Any]] = None,
         ganglion_args: Optional[Dict[str, Any]] = None,
         layer_name: str = "Retina",
     ):
-        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
+        logger.info(f"{layer_name:<8s} ] Initialising...")
 
         # Sanity checks
-        if scaled_height is not None and scaled_width is not None:
+        # ==================================================
+        if height is not None and width is not None:
             raise ValueError("Please provide the new height *or* width, but not both.")
 
-        # * Source parameters * #
+        # Source parameters
+        # ==================================================
         self.src_path = source
         self.source = None
         self.stream = None
         self.reader = None
 
-        # * Current frame * #
+        # Current frame
+        # ==================================================
         self.frame = None
         self.generator = None
 
-        # * Output channels * #
+        # Output channels
+        # ==================================================
         self.frame_path = None
         self.video_path = None
         self.video_sink = None
 
-        # * Flag indicating whether the source is still being processed * #
+        # Flag indicating whether the source is still being processed
         self.processing = True
 
         if isinstance(source, str):
@@ -113,15 +113,16 @@ class Retina(ProtoLayer):
 
         self.receptor = ReceptorLayer(
             original_shape,
-            scaled_height,
-            scaled_width,
+            height,
+            width,
             saccades,
             **receptor_args,
         )
 
         # print(f"==[ receptors: {self.receptors.kmask.shape}")
 
-        # * Bipolar cells * #
+        # Bipolar cells
+        # ==================================================
         if bipolar_args is None:
             bipolar_args = {}
 
@@ -131,7 +132,10 @@ class Retina(ProtoLayer):
             **bipolar_args,
         )
 
-        # * Amacrine + ganglion cells * #
+        # Amacrine layer
+        # ==================================================
+
+        ganglion cells
 
         if ganglion_args is None:
             ganglion_args = {}
@@ -142,7 +146,7 @@ class Retina(ProtoLayer):
             **ganglion_args,
         )
 
-        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
+        logger.info(f"{layer_name:<8s} ] Initialised.")
 
         # Display some useful info
         logger.info("Press ESC to quit.")
@@ -534,3 +538,78 @@ class Retina(ProtoLayer):
 
             if self.video_sink is not None:
                 self.video_sink.write(cimage)
+
+
+    def _compute_dimensions(
+        self,
+        shape: Tuple[int],
+        height: int = None,
+        width: int = None,
+        saccades: bool = False,
+    ) -> Dims:
+        """
+        Compute various dimensions for the original and processed input.
+
+        Args:
+            scaled_height (Optional[int], optional):
+                _description_. Defaults to None.
+
+            scaled_width (Optional[int], optional):
+                _description_. Defaults to None.
+
+            saccades (bool, optional):
+                _description_. Defaults to False.
+
+        Returns:
+            Dims: Dimensions.
+        """
+
+        dims = Dims(Dim(*shape), Dim(*shape))
+        dims.cur.span = dims.cur.height * dims.cur.width * dims.cur.depth
+
+        dims.resize = False
+
+        if bool(width) and bool(height):
+            raise ValueError("Please specify a scaled height *or* width, but not both!")
+
+        elif bool(width) ^ bool(height):
+
+            if height is not None:
+                # Fixed height, calculate the width with the same AR
+                pct = height / float(dims.orig.height)
+                width = int((float(dims.orig.width) * pct))
+
+            elif width is not None:
+                # Fixed width, calculate the height with the same AR
+                pct = width / float(dims.orig.width)
+                height = int((float(dims.orig.height) * pct))
+
+            dims.cur.height = height
+            dims.cur.width = width
+            dims.cur.span = dims.cur.height * dims.cur.width * dims.cur.depth
+            dims.resize = True
+
+        # Left and right padding
+        lr_padding = (dims.cur.width // 2 + dims.cur.width % 2) if saccades else 0
+
+        # Top and bottom padding
+        tb_padding = (dims.cur.height // 2 + dims.cur.height % 2) if saccades else 0
+
+        dims.padded.width = dims.cur.width + 2 * lr_padding
+        dims.padded.height = dims.cur.height * dims.cur.depth + 2 * tb_padding
+        dims.padded.depth = dims.cur.depth
+        dims.padded.span = dims.padded.width * dims.padded.height * dims.padded.depth
+
+        # The frame is padded only at the top and the bottom,
+        # but the left and right padding values are used
+        # to compute the size of the retinal field below.
+        dims.padding = np.array(
+            [
+                lr_padding,
+                lr_padding,
+                tb_padding,
+                tb_padding,
+            ]
+        )
+
+        return dims

@@ -1,7 +1,4 @@
-from typing import Set
-from typing import Dict
-from typing import Tuple
-from typing import Optional
+from typing import *
 
 # --------------------------------------
 from loguru import logger
@@ -13,59 +10,49 @@ import enum
 from pathlib import Path
 
 # --------------------------------------
+import numpy as np
+
+# --------------------------------------
 import torch as pt
-from torch.distributions.one_hot_categorical import OneHotCategorical
+from torch.distributions import OneHotCategorical
 
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
-from pyrception.visual.util.types import (
-    View,
-    RFSizeDist,
-    KernelType,
-    KernelType,
-)
-from pyrception.visual.proto import ProtoLayer
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import Dim
+from pyrception.visual.util.types import Dims
+from pyrception.visual.layers.base import BaseLayer
 
 
-class ReceptorLayer(ProtoLayer):
-
+class ReceptorLayer(BaseLayer):
     """
-    A layer of receptors and horizontal cells.
+    A layer of receptors.
 
-    This layer applies local normalisation to the input
-    by looking at an eccentricity-dependent patch of receptors
-    and their activations to normalise the activation of the
-    receptor in the centre.
+    This layer applies the first processing steps to the raw input.
     """
 
     def __init__(
         self,
-        original_shape: pt.Tensor,
-        scaled_height: Optional[int],
-        scaled_width: Optional[int],
-        saccades: bool,
+        shape: Tuple[int, int, int],
+        height: int = None,
+        width: int = None,
+        saccades: bool = False,
         mode: Optional[enum.Enum] = cv.COLOR_RGB2GRAY,
-        k_min: int = 1,
-        k_max: int = 15,
-        mh: Optional[int] = None,
-        mw: Optional[int] = None,
-        sh: int = 1 / 8,
-        sw: int = 1 / 8,
-        rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
-        rftype: KernelType = KernelType.Proportional,
-        decreasing: bool = True,
-        smooth: bool = True,
-        layer_name: str = "Receptor",
+        name: str = "Receptor",
     ):
-        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
+
+        name = f'{name:<10s}'
+        super().__init__(name)
+
+        self.log("Initialising...")
 
         # Dimensions and resize flag
-        self.dim = self._compute_dimensions(
-            original_shape,
-            scaled_height,
-            scaled_width,
+        self.dims = self._compute_dimensions(
+            shape,
+            height,
+            width,
             saccades,
         )
 
@@ -74,32 +61,9 @@ class ReceptorLayer(ProtoLayer):
 
         # Change the depth of the processed frame.
         if self.flatmask is not None:
-            self.dim.D = 1
+            self.dims.comp.depth = 1
 
-        (self.kmask, ksizes) = self.make_rfs(
-            self.dim.padded.H,
-            self.dim.padded.W,
-            k_min,
-            k_max,
-            mh,
-            mw,
-            sh,
-            sw,
-            rfsizedist,
-            decreasing,
-            smooth,
-        )
-
-        # Create the receptive fields.
-        # If saccades are supported,
-        # the receptive field map is twice
-        # the size of the original input in each dimension.
-        self.rf = self._make_rf(
-            ksizes,
-            rftype=rftype,
-        )
-
-        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
+        self.log("Initialised.")
 
     @logger.catch
     def make_flatmask(
@@ -111,12 +75,12 @@ class ReceptorLayer(ProtoLayer):
         version of the original image with colour channel sampling.
         """
 
-        if self.dim.orig.D == 1 or mode is None:
+        if self.dims.orig.depth == 1 or mode is None:
             return
 
         print(f"==[ Creating flatmask...")
 
-        probs = pt.zeros((self.dim.H, self.dim.W, self.dim.D))
+        probs = pt.zeros((self.dims.H, self.dims.W, self.dims.D))
 
         r_prob = 0.475
         g_prob = 0.475
@@ -178,7 +142,7 @@ class ReceptorLayer(ProtoLayer):
         else:
             padded = frame
 
-        mean = self._convolve(padded, self.rf, self.dim.padded.H, self.dim.padded.W)
+        mean = self._convolve(padded, self.rf, self.dims.padded.H, self.dims.padded.W)
 
         if offset is not None:
             mean = self.unpad(mean, padding)

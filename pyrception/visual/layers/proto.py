@@ -28,53 +28,62 @@ from dotmap import DotMap
 import torch as pt
 import torch.nn.functional as ptf
 
-pt.set_printoptions(linewidth=200)
+# pt.set_printoptions(linewidth=200)
 
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
-from pyrception import conf
-from pyrception.visual.util.types import KernelType
-
-# --------------------------------------
 from functools import partial
 
+# --------------------------------------
+from pyrception import conf
+from pyrception.visual.util.types import KernelType
+from pyrception.visual.layers.base import BaseLayer
 
-class ProtoLayer:
 
+class ProtoLayer(BaseLayer):
     """
     A proto-layer serving as a base class to all the other retinal layers.
     """
 
     def __init__(
         self,
-        h: int,
-        w: int,
+        shape: Tuple[int, int],
         sectors: int = 36,
         kernel_type: KernelType = KernelType.Proportional,
         kernel_scale: float = 1.0,
         kernel_params: Dict[str, Any] = None,
-        extent: int = None,
-        cutoff: float = 1e-3,
-        scaled_height: Optional[int] = None,
-        scaled_width: Optional[int] = None,
-        saccades: bool = False,
+        min_kernel_size: int = 1,
+        extent: int = 1.0,
+        fovea_ratio: int = 1.0,
+        kernel_cutoff: float = 1e-3,
+        inverse: bool = False,
+        dense: bool = False,
+        name: str = "Proto",
     ):
+
+        name = f"{name:<10s}"
+        super().__init__(name)
+
+        self.log("Initialising...")
+
         if kernel_params is None:
             kernel_params = {}
 
-        self.h = h
-        self.w = w
+        # TODO: add some assertions
+        self.h = shape[0]
+        self.w = shape[1]
         self.sectors = sectors
         self.kernel_type = kernel_type
         self.kernel_scale = kernel_scale
         self.kernel_params = kernel_params
+        self.min_kernel_size = min_kernel_size
         self.extent = extent
-        self.cutoff = cutoff
+        self.fovea_ratio = fovea_ratio
+        self.kernel_cutoff = kernel_cutoff
 
-        # Dimensions and resize flag
-        self.dim = self._compute_dimensions(scaled_height, scaled_width, saccades)
+        self.dims = self._compute_dimensions((self.h, self.w))
 
         # Kernel factory
         # ==================================================
@@ -97,8 +106,12 @@ class ProtoLayer:
         self.rows = None
         self.cols = None
         self.vals = None
-        self.coords = None
+        self.cell_coords = None
         self.rfs = None
+        self.neuron_count = 0
+        self.rf_factors = None
+
+        self._make_rfs(inverse, dense)
 
     def _make_mesh(self) -> pt.Tensor:
         if self.Xs is not None:
@@ -125,62 +138,6 @@ class ProtoLayer:
         indices = pt.unique(indices[mask], dim=0)
 
         return indices
-
-    def _compute_dimensions(
-        self,
-        scaled_height: Optional[int] = None,
-        scaled_width: Optional[int] = None,
-        saccades: bool = False,
-    ):
-        dim = DotMap()
-        original_shape = [self.h, self.w, 1]
-
-        (dim.orig.H, dim.orig.W, dim.orig.D) = tuple(original_shape)
-        (dim.H, dim.W, dim.D) = tuple(original_shape)
-        dim.orig.span = dim.orig.H * dim.orig.W * dim.orig.D
-
-        dim.resize = False
-
-        if bool(scaled_width) ^ bool(scaled_height):
-            if scaled_height is not None:
-                # Fixed height, calculate the width with the same AR
-                pct = scaled_height / float(original_shape[0])
-                scaled_width = int((float(original_shape[1]) * pct))
-
-            elif scaled_width is not None:
-                # Fixed width, calculate the height with the same AR
-                pct = scaled_width / float(original_shape[1])
-                scaled_height = int((float(original_shape[0]) * pct))
-
-            dim.H = scaled_height
-            dim.W = scaled_width
-            dim.span = dim.H * dim.W * dim.D
-            dim.resize = True
-
-        # Left and right padding
-        lr_padding = (dim.W // 2 + dim.W % 2) if saccades else 0
-
-        # Top and bottom padding
-        tb_padding = (dim.H // 2 + dim.H % 2) if saccades else 0
-
-        dim.padded.W = dim.W + 2 * lr_padding
-        dim.padded.H = dim.H * dim.D + 2 * tb_padding
-        dim.padded.D = dim.D
-        dim.padded.span = dim.padded.W * dim.padded.H * dim.padded.D
-
-        # The frame is padded only at the top and the bottom,
-        # but the left and right padding values are used
-        # to compute the size of the retinal field below.
-        dim.padding = np.array(
-            [
-                lr_padding,
-                lr_padding,
-                tb_padding,
-                tb_padding,
-            ]
-        )
-
-        return dim
 
     def _make_proportional_kernels(
         self,
@@ -212,7 +169,7 @@ class ProtoLayer:
         if rows.numel() > 0:
             if fill is None:
                 # fill = radius**-2
-                fill = 1 / (1 + rows.numel())
+                fill = 1 / rows.numel()
             values = [fill] * rows.shape[0]
 
             # Return the kernel indices and values
@@ -242,7 +199,7 @@ class ProtoLayer:
         )
 
         # Limit the kernel to values above the cutoff
-        k_idx = pt.argwhere(values >= self.cutoff)
+        k_idx = pt.argwhere(values >= self.kernel_cutoff)
 
         # Cut off coordinates that do not fit into the image
         coords = self._trim(k_idx)
@@ -253,10 +210,17 @@ class ProtoLayer:
             values /= 2 * pt.pi * sd**2
 
         if rows.numel() > 0:
-            values = values[cols, rows]
+            values = values[cols, rows].flatten()
+
+            # Limit to reasonable values that are not too small
+            limit = 0.01 * values.max()
+            limit_coords = values >= limit
+            values = values[limit_coords]
+            rows = rows[limit_coords]
+            cols = cols[limit_coords]
 
             # Return the kernel indices and values
-            return (rows, cols, values.flatten())
+            return (rows, cols, values)
 
     def _make_gabor_kernels(
         self,
@@ -331,39 +295,21 @@ class ProtoLayer:
 
         return frame.reshape(w, h).t()
 
-    def make_rfs(
+    def _make_sparse_coordinates(
         self,
+        w2: int,
+        h2: int,
+        rho_max: int,
+        rho_fovea: int,
         inverse: bool = False,
-    ) -> pt.Tensor:
-        """
-        Implementation of eccentricity-dependent logpolar distribution of receptive fields as presented in
+    ):
 
-        Maiello, G., Chessa, M., Bex, P. J. & Solari, F. Near-optimal combination of disparity across a log-polar scaled visual field. PLoS Comput Biol 16, e1007699 (2020).
-
-        Args:
-
-        Returns:
-            pt.Tensor:
-                The receptive fields.
-        """
-
-        # Prepare the mesh
-        self._make_mesh()
-
-        # Construct the receptive fields
-        # ==================================================
-
-        # Coordinates of the central pixel
-        w2 = self.w // 2
-        h2 = self.h // 2
-
-        # Maximal radius of the centre of the log-polar rings
-        rho_max = math.sqrt(h2**2 + w2**2)
-
-        # Size of the foveal region
-        rho_f = math.log(rho_max)
-
-        # Number of sectors (ideally should be divisible by 4)
+        # Number of sectors
+        # NOTE:
+        # Ideally, this should be divisible by 4 because then the distribution
+        # is nicely symmetric with respect to the x and y axes.
+        # TODO:
+        # Figure out if it's worth actually enforcing that the sectors be divisible by 4.
         S = self.sectors
 
         # Sector size
@@ -376,7 +322,7 @@ class ProtoLayer:
         # Number of radial rings (coupled with the number of sectors)
         # R = np.floor(1 / np.emath.logn(rho_max / rho_f, a)).astype(np.int32)
         log_a = math.log(a)
-        R = math.floor(math.log(rho_max / rho_f) / log_a)
+        R = math.floor(math.log(rho_max / rho_fovea) / log_a)
 
         # Cartesian coordinate mesh (x, y)
         rf_xs = pt.linspace(-h2, h2 + 1, self.h + 1)
@@ -385,12 +331,12 @@ class ProtoLayer:
 
         # Logpolar coordinate mesh (r, φ)
         radii = pt.sqrt(Xs**2 + Ys**2)
-        ratios = Xs / radii
-        angles = pt.arccos(ratios)
+        radial_ratios = Xs / radii
+        angles = pt.arccos(radial_ratios)
         angles = pt.where(Ys > 0, 2 * pt.pi - angles, angles)
 
         # Eccentricity-dependent logpolar coordinates
-        ksi = pt.log(radii / rho_f) / log_a
+        ksi = pt.log(radii / rho_fovea) / log_a
         eta = q * angles
 
         # Discrete versions of ksi and eta (mappable to pixel coordinates)
@@ -400,7 +346,7 @@ class ProtoLayer:
         # Mesh of discrete logpolar coordinates of the RF centres
         # Rs: radii
         # Ts: angles
-        rpoints = pt.unique(rho_f * (a**u))
+        rpoints = pt.unique(rho_fovea * (a**u))
         tpoints = pt.unique(v / q)
         (Rs, Ts) = pt.meshgrid(rpoints, tpoints, indexing="ij")
 
@@ -411,28 +357,95 @@ class ProtoLayer:
         # print(f"==[ {rf_xs.shape}")
         # print(f"==[ {rf_ys.shape}")
 
-        # Cut off coordinates that do not fit into the image
+        # Eliminate duplicates
         coords = pt.unique(
-            pt.stack((rf_xs.flatten(), rf_ys.flatten()), dim=1), dim=0
+            pt.stack(
+                (rf_xs.flatten(), rf_ys.flatten()),
+                dim=1,
+            ),
+            dim=0,
         ).int()
+
+        # Trim coordinates that fall outside the image boundaries
         coords = self._trim(coords)
 
         # Maximal RF size
         if inverse:
-            # TODO This is ad hoc, needs to be adjusted
-            W_init = (rho_f / rho_max) * (a**R) * (1 - 1 / a)
+            # TODO:
+            # This needs to be changed, right now
+            # it's the same as the other branch
+            rf_width = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
         else:
-            W_init = (rho_f / rho_max) * (a**R) * (1 - 1 / a)
+            rf_width = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
 
-        print(f"==[ W_max: {W_init}")
+        return (coords, rf_width)
 
-        # Finally, compute the kernels.
+    def _make_rfs(
+        self,
+        inverse: bool = False,
+        dense: bool = False,
+    ):
+        """
+        Implementation of eccentricity-dependent log-polar distribution
+        of receptive fields as presented here, with slight corrections and improvements:
+
+        Maiello, G., Chessa, M., Bex, P. J. & Solari, F.
+        Near-optimal combination of disparity across a log-polar scaled visual field.
+        PLoS Comput Biol 16, e1007699 (2020).
+
+        Args:
+
+            inverse (bool):
+                Inverse log-polar distribution (larger RFs in the centre). Defaults to False.
+
+            dense (bool):
+                Create a dense coverage (one kernel per pixel). Defaults to False.
+                    Note: Use this option with caution, especially for large layers.
+                    It increases memory conumption substantially!
+        """
+
+        self.log("Creating receptive fields...")
+
+        # Coordinates of the central pixel
+        w2 = self.w // 2
+        h2 = self.h // 2
+
+        # Construct the receptive fields
+        # ==================================================
+
+        # Maximal offset of the centre of the log-polar
+        # rings from the centre of the FoV
+        rho_max = math.sqrt(h2**2 + w2**2)
+
+        # Size of the foveal region
+        rho_fovea = (
+            math.log(rho_max)
+            if self.fovea_ratio is None
+            else rho_max * self.fovea_ratio
+        )
+
+        # Prepare the mesh
+        self._make_mesh()
+
+        # Compute the coordinates and the RF size ratio
+        if not dense:
+            (coords, rf_width) = self._make_sparse_coordinates(
+                w2, h2, rho_max, rho_fovea, inverse
+            )
+        else:
+            # TODO: A dense version
+            (coords, rf_width) = self._make_sparse_coordinates(
+                w2, h2, rho_max, rho_fovea, inverse
+            )
+
+        # Make the receptive fields.
         # ==================================================
         rows = []
         cols = []
         values = []
         indices = []
-        rf_coords = []
+        cell_coords = []
+        neuron_count = 0
 
         extent = rho_max if self.extent is None else self.extent * rho_max
 
@@ -444,11 +457,14 @@ class ProtoLayer:
                 continue
 
             if inverse:
-                radius = max(1, self.kernel_scale * W_init * (rho_max - cdist + 1))
+                radius = max(
+                    self.min_kernel_size,
+                    self.kernel_scale * rf_width * (rho_max - cdist),
+                )
                 if radius < 3:
                     continue
             else:
-                radius = self.kernel_scale * W_init * cdist
+                radius = max(self.min_kernel_size, self.kernel_scale * rf_width * cdist)
 
             result = self.kernel_function(
                 rx,
@@ -460,19 +476,26 @@ class ProtoLayer:
             if result is not None:
                 (rs, cs, vs) = result
 
-                rows.append(rs.tolist())
-                cols.append(cs.tolist())
+                rows.append(rs)
+                cols.append(cs)
                 values.append(vs)
-                indices.append([len(indices)] * len(rs))
-                rx = max(0, min(rx, self.w - 1))
-                ry = max(0, min(ry, self.h - 1))
-                rf_coords.append([ry, rx])
+                indices.append([len(indices) for _ in range(len(rs))])
+                # rx = max(0, min(rx, self.h - 1))
+                # ry = max(0, min(ry, self.w - 1))
+
+                # These are the coordinates of the cell itself.
+                # It should be in the centre of the receptive field.
+                cell_coords.append([ry, rx])
+                neuron_count += 1
+
                 # print(f"==[ rs: {rs.shape}")
                 # print(f"==[ {idx} ] indices: {len(indices[-1])}")
 
         # Prepare the sparse tensor coordinates and values
+        concat_rows = np.concatenate(rows)
+        concat_cols = np.concatenate(cols)
         sp_rows = np.concatenate(indices)
-        sp_cols = np.concatenate(rows) + self.h * np.concatenate(cols)
+        sp_cols = concat_rows + self.h * concat_cols
         sp_vals = np.concatenate(values)
 
         sp_indices = np.vstack(
@@ -488,7 +511,7 @@ class ProtoLayer:
                 sp_vals,
                 size=(
                     len(indices),
-                    self.dim.padded.span,
+                    self.dims.comp.span,
                 ),
                 dtype=pt.float32,
             )
@@ -499,8 +522,31 @@ class ProtoLayer:
         self.rows = rows
         self.cols = cols
         self.vals = values
-        self.coords = np.array(rf_coords)
+        self.cell_coords = np.array(cell_coords)
+
+        d = {(x, y): 0 for y in range(self.w) for x in range(self.h)}
+        for coord in [
+            tuple(_)
+            for _ in np.vstack(
+                [
+                    concat_rows,
+                    concat_cols,
+                ]
+            ).T
+        ]:
+            d[coord] += 1
+
+        rf_factors = pt.zeros((self.h, self.w), dtype=pt.float32)
+
+        for (y, x), v in d.items():
+            rf_factors[y, x] += v
+        rf_factors[rf_factors == 0] = 1
+        self.rf_factors = 1 / rf_factors
+
         self.rfs = rfs
+        self.neuron_count = neuron_count
+
+        self.log("Receptive fields created.")
 
     @staticmethod
     def pad(
@@ -572,118 +618,6 @@ class ProtoLayer:
 
         return padding
 
-    # def _compute_dimensions(
-    #     self,
-    #     original_shape: List[int],
-    #     scaled_height: Optional[int] = None,
-    #     scaled_width: Optional[int] = None,
-    #     saccades: bool = False,
-    # ):
-    #     dim = DotMap()
-
-    #     if len(original_shape) == 2:
-    #         original_shape.append(1)
-
-    #     # NOTE: Dimension order is (H,W,D)
-    #     # NOTE: Perhaps use transparency as well?
-    #     dim.orig.shape = original_shape
-    #     (dim.orig.H, dim.orig.W, dim.orig.D) = tuple(original_shape)
-    #     dim.orig.span = dim.orig.H * dim.orig.W * dim.orig.D
-    #     (dim.H, dim.W, dim.D) = tuple(original_shape)
-    #     dim.shape = original_shape
-
-    #     dim.resize = False
-
-    #     if bool(scaled_height) ^ bool(scaled_width):
-    #         if scaled_height is not None:
-    #             # Fixed height, calculate the width with the same AR
-    #             pct = scaled_height / float(original_shape[0])
-    #             scaled_width = int((float(original_shape[1]) * pct))
-
-    #         elif scaled_width is not None:
-    #             # Fixed width, calculate the height with the same AR
-    #             pct = scaled_width / float(original_shape[1])
-    #             scaled_height = int((float(original_shape[0]) * pct))
-
-    #         dim.H = scaled_height
-    #         dim.W = scaled_width
-    #         dim.shape = (dim.H, dim.W, dim.D)
-    #         dim.span = dim.H * dim.W * dim.D
-    #         dim.resize = True
-
-    #     # Left and right padding
-    #     left_right_padding = dim.W // 2 + dim.W % 2 if saccades else 0
-
-    #     # Top and bottom padding
-    #     top_bottom_padding = dim.H // 2 + dim.H % 2 if saccades else 0
-
-    #     dim.padded.W = dim.W + 2 * left_right_padding
-    #     dim.padded.H = dim.H * dim.D + 2 * top_bottom_padding
-    #     dim.padded.D = dim.D
-    #     dim.padded.span = dim.padded.W * dim.padded.H * dim.padded.D
-
-    #     # The frame is padded only at the top and the bottom,
-    #     # but the left and right padding values are used
-    #     # to compute the size of the retinal field below.
-    #     dim.padding = np.array(
-    #         [
-    #             left_right_padding,
-    #             left_right_padding,
-    #             top_bottom_padding,
-    #             top_bottom_padding,
-    #         ]
-    #     )
-
-    #     # print(f"==[ dim: {dim}")
-
-    #     return dim
-
-    def make_rf_phyllotactic(
-        h: int = 256,
-        w: int = 256,
-        r0: float = 0.1,
-        z: float = 1.0005,
-        div: float = 2 / (1 + np.sqrt(5)),
-        sd_coeff: float = 0.4,
-    ):
-        """
-        WIP - do not use!
-
-        A version of the logpolar distribution that follows a phyllotactic pattern.
-        This type of pattern is observed in the receptor layer.
-
-        Returns:
-            pt.Tensor:
-                Kernels (and the kernel indices) arranged in a phyllotactic pattern.
-        """
-        kernels = {}
-        mw = w // 2
-        mh = h // 2
-        x = mh
-        y = mw
-
-        diag = np.sqrt((h - mh) ** 2 + (w - mw) ** 2)
-
-        n = 0
-        while np.sqrt((x - mh) ** 2 + (y - mw) ** 2) <= diag:
-            r_n = r0 * z**n
-            theta_n = 2 * np.pi * n * div
-
-            x = int(r_n * (z**theta_n) * np.sin(theta_n)) + mh
-            y = int(r_n * (z**theta_n) * np.cos(theta_n)) + mw
-            if 0 <= x < h and 0 <= y < w:
-                if (x, y) not in kernels:
-                    sd = sd_coeff * r0 * np.sqrt((x - mh) ** 2 + (y - mw) ** 2)
-                    kernel = np.nan_to_num(
-                        ProtoLayer._make_gaussian_kernels(h, w, x, y, sd, sd).numpy(),
-                        nan=0.0,
-                    )
-                    kernels[(x, y)] = kernel
-
-            n += 1
-
-        return kernels
-
     def _convolve(
         self,
         frame: pt.Tensor,
@@ -725,120 +659,120 @@ class ProtoLayer:
 
         return folded
 
-    def _make_rf(
-        self,
-        ksizes: pt.Tensor,
-        rftype: KernelType = KernelType.Proportional,
-        scale: float = 1.0,
-        norm: bool = False,
-    ):
-        # Compute tensor indices for each kernel size
-        indices = {}
-        for i in range(ksizes.min(), ksizes.max() + 1):
-            indices[i] = pt.where(ksizes == i)
+    # def _make_rf(
+    #     self,
+    #     ksizes: pt.Tensor,
+    #     rftype: KernelType = KernelType.Proportional,
+    #     scale: float = 1.0,
+    #     norm: bool = False,
+    # ):
+    #     # Compute tensor indices for each kernel size
+    #     indices = {}
+    #     for i in range(ksizes.min(), ksizes.max() + 1):
+    #         indices[i] = pt.where(ksizes == i)
 
-        rf_rows = []
-        rf_cols = []
-        rf_vals = []
+    #     rf_rows = []
+    #     rf_cols = []
+    #     rf_vals = []
 
-        for ksize, (rows, cols) in indices.items():
-            if rows.numel() == 0:
-                continue
+    #     for ksize, (rows, cols) in indices.items():
+    #         if rows.numel() == 0:
+    #             continue
 
-            # Row and column spans for the current kernel size
-            # ==================================================
-            kspan = pt.linspace(-ksize // 2 + 1, ksize // 2, ksize)
-            # print(f'==[ diff:\n{diff}')
+    #         # Row and column spans for the current kernel size
+    #         # ==================================================
+    #         kspan = pt.linspace(-ksize // 2 + 1, ksize // 2, ksize)
+    #         # print(f'==[ diff:\n{diff}')
 
-            # Rows spanned by stretched kernels
-            # ==================================================
-            krowspan = (
-                (rows[None, :].repeat(ksize, 1) + kspan[:, None])
-                .t()
-                .repeat(1, ksize)
-                .int()
-            ).flatten()
+    #         # Rows spanned by stretched kernels
+    #         # ==================================================
+    #         krowspan = (
+    #             (rows[None, :].repeat(ksize, 1) + kspan[:, None])
+    #             .t()
+    #             .repeat(1, ksize)
+    #             .int()
+    #         ).flatten()
 
-            # Columns spanned by stretched kernels
-            # ==================================================
-            kcolspan = (
-                (cols[None, :].repeat(ksize, 1) + kspan[:, None])
-                .t()
-                .repeat_interleave(ksize, dim=1)
-                .int()
-            ).flatten()
+    #         # Columns spanned by stretched kernels
+    #         # ==================================================
+    #         kcolspan = (
+    #             (cols[None, :].repeat(ksize, 1) + kspan[:, None])
+    #             .t()
+    #             .repeat_interleave(ksize, dim=1)
+    #             .int()
+    #         ).flatten()
 
-            # Boundary check mask
-            # ==================================================
-            boundary_mask = (
-                krowspan.ge(0)
-                * krowspan.lt(self.dim.padded.H)
-                * kcolspan.ge(0)
-                * kcolspan.lt(self.dim.padded.W)
-            ).flatten()
+    #         # Boundary check mask
+    #         # ==================================================
+    #         boundary_mask = (
+    #             krowspan.ge(0)
+    #             * krowspan.lt(self.dim.padded.H)
+    #             * kcolspan.ge(0)
+    #             * kcolspan.lt(self.dim.padded.W)
+    #         ).flatten()
 
-            # Sparse row and column indices
-            # ==================================================
-            sp_rows = (
-                (cols * self.dim.padded.H + rows)
-                .int()[:, None]
-                .repeat(1, ksize**2)
-                .flatten()
-            )
-            sp_cols = kcolspan * self.dim.padded.H + krowspan
+    #         # Sparse row and column indices
+    #         # ==================================================
+    #         sp_rows = (
+    #             (cols * self.dim.padded.H + rows)
+    #             .int()[:, None]
+    #             .repeat(1, ksize**2)
+    #             .flatten()
+    #         )
+    #         sp_cols = kcolspan * self.dim.padded.H + krowspan
 
-            # Combined sparse indices with boundary check
-            # ==================================================
-            sp_indices = pt.cat((sp_rows[:, None], sp_cols[:, None]), dim=1)[
-                boundary_mask
-            ]
+    #         # Combined sparse indices with boundary check
+    #         # ==================================================
+    #         sp_indices = pt.cat((sp_rows[:, None], sp_cols[:, None]), dim=1)[
+    #             boundary_mask
+    #         ]
 
-            sp_rows = sp_indices[:, 0]
-            sp_cols = sp_indices[:, 1]
+    #         sp_rows = sp_indices[:, 0]
+    #         sp_cols = sp_indices[:, 1]
 
-            rf_rows.extend(sp_rows.tolist())
-            rf_cols.extend(sp_cols.tolist())
+    #         rf_rows.extend(sp_rows.tolist())
+    #         rf_cols.extend(sp_cols.tolist())
 
-            if rftype == KernelType.Proportional:
-                (rows, cols, kernel) = self._make_gaussian_kernels(
-                    ksize,
-                    scale,
-                    norm,
-                    rows,
-                    boundary_mask,
-                )
+    #         if rftype == KernelType.Proportional:
+    #             (rows, cols, kernel) = self._make_gaussian_kernels(
+    #                 ksize,
+    #                 scale,
+    #                 norm,
+    #                 rows,
+    #                 boundary_mask,
+    #             )
 
-            elif rftype == KernelType.Gabor:
-                kvals = self._make_gaussian_kernels(
-                    rftype,
-                    boundary_mask=boundary_mask,
-                )
+    #         elif rftype == KernelType.Gabor:
+    #             kvals = self._make_gaussian_kernels(
+    #                 rftype,
+    #                 boundary_mask=boundary_mask,
+    #             )
 
-            elif rftype == KernelType.Proportional:
-                (rows, cols, kernel) = self._make_proportional_kernels(
-                    ksize,
-                    scale,
-                    sp_rows,
-                )
+    #         elif rftype == KernelType.Proportional:
+    #             (rows, cols, kernel) = self._make_proportional_kernels(
+    #                 ksize,
+    #                 scale,
+    #                 sp_rows,
+    #             )
 
-            else:
-                raise ValueError(f"Invalid RF type '{rftype}'")
+    #         else:
+    #             raise ValueError(f"Invalid RF type '{rftype}'")
 
-            rf_vals.extend(kvals)
+    #         rf_vals.extend(kvals)
 
-        rf = pt.sparse_coo_tensor(
-            np.array(
-                [
-                    rf_rows,
-                    rf_cols,
-                ]
-            ),
-            np.array(rf_vals),
-            size=(
-                self.dim.padded.span,
-                self.dim.padded.span,
-            ),
-            dtype=pt.float32,
-        )
+    #     rf = pt.sparse_coo_tensor(
+    #         np.array(
+    #             [
+    #                 rf_rows,
+    #                 rf_cols,
+    #             ]
+    #         ),
+    #         np.array(rf_vals),
+    #         size=(
+    #             self.dim.padded.span,
+    #             self.dim.padded.span,
+    #         ),
+    #         dtype=pt.float32,
+    #     )
 
-        return rf.coalesce().to_sparse_csr()
+    #     return rf.coalesce().to_sparse_csr()

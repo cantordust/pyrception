@@ -4,7 +4,6 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
-  - bokeh
   - cpuonly
   - dotmap
   - h5py
@@ -18,6 +17,7 @@ dependencies:
   - pytorch
   - scikit-image
   - scipy
+  - seaborn
   - torchvision
   - tqdm
   - pip:

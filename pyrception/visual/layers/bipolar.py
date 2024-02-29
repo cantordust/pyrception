@@ -15,83 +15,34 @@ import torch.nn.functional as ptf
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.visual.util.types import (
-    View,
-    RFSizeDist,
-    KernelType,
-    KernelType,
-)
-from pyrception.visual.proto import ProtoLayer
-from pyrception.visual.receptor import ReceptorLayer
+from pyrception.visual.util.types import View
+from pyrception.visual.util.types import KernelType
+from pyrception.visual.layers.horizontal import HorizontalLayer
+from pyrception.visual.layers.proto import ProtoLayer
 
 
 class BipolarLayer(ProtoLayer):
-
     """
-    A field of bipolar cells.
+    A layer of bipolar cells.
     This layer processes the signal form the receptor layer
-    and passes it on to the RGC layer.
+    modulated by the horizontal layer.
     """
 
     def __init__(
         self,
-        source: ReceptorLayer,
-        saccades: bool,
-        alpha: float = 0.1,
-        k_min: int = 1,
-        k_max: int = 11,
-        mh: Optional[int] = None,
-        mw: Optional[int] = None,
-        sh: int = 1 / 8,
-        sw: int = 1 / 8,
-        rfsizedist: RFSizeDist = RFSizeDist.Gaussian,
-        rftype: KernelType = KernelType.Proportional,
-        decreasing: bool = False,
-        smooth: bool = True,
-        layer_name: str = "Bipolar",
+        *args,
+        **kwargs,
     ):
 
-        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
-
-        self.source = source
-
-        # Dimensions and resize flag
-        self.dim = self._compute_dimensions(
-            source.dim.shape,
-            source.dim.H,
-            source.dim.W,
-            saccades,
-        )
-
-        self.alpha = alpha
+        kwargs.setdefault("name", "Bipolar")
+        super().__init__(*args, **kwargs)
 
         # Temporal mean
-        self.tmean = pt.zeros(
-            self.dim.H,
-            self.dim.W,
-        )
+        self.tmean = pt.zeros((self.neuron_count,))
+        self.on = pt.zeros((self.neuron_count,))
+        self.off = pt.zeros_like(self.on)
 
-        (self.kmask, ksizes) = self.make_rfs(
-            self.dim.H,
-            self.dim.W,
-            k_min,
-            k_max,
-            mh,
-            mw,
-            sh,
-            sw,
-            rfsizedist,
-            decreasing,
-            smooth,
-        )
-
-        # Receptive fields.
-        self.rf = self._make_rf(
-            ksizes,
-            rftype=rftype,
-        )
-
-        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
+        self.log("Initialised.")
 
     @logger.catch
     def process(
