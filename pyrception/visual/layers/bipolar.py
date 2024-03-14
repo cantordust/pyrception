@@ -44,11 +44,9 @@ class BipolarLayer(ProtoLayer):
 
         self.log("Initialised.")
 
-    @logger.catch
     def process(
         self,
-        views: Dict[View, pt.Tensor],
-        n_frame: int,
+        frame: int,
         save_frames: Set[int],
         save_views: Set[View],
         frame_paths: Optional[Dict[View, Path]],
@@ -79,8 +77,8 @@ class BipolarLayer(ProtoLayer):
 
         _views[View.BipolarMean] = self.tmean
 
-        if n_frame in save_frames:
-            self._save_views(_views, n_frame, save_views, frame_paths)
+        if frame in save_frames:
+            self._save_views(_views, frame, save_views, frame_paths)
 
         views.update(_views)
 

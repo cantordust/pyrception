@@ -60,6 +60,7 @@ class ProtoLayer(BaseLayer):
         kernel_cutoff: float = 1e-3,
         inverse: bool = False,
         dense: bool = False,
+        tau: Union[float, pt.Tensor] = 10.0,  # ms
         name: str = "Proto",
     ):
 
@@ -110,6 +111,17 @@ class ProtoLayer(BaseLayer):
         self.rfs = None
         self.neuron_count = 0
         self.rf_factors = None
+
+        # Running statistics
+        # ==================================================
+        self.mean_dt = 0.0
+
+        # Tau and alpha don't change
+        self.tau = tau
+        self.alpha = 1 / (1 + tau)
+
+        # Beta is the adaptive version of alpha
+        self.beta = self.alpha.clone()
 
         self._make_rfs(inverse, dense)
 
@@ -268,21 +280,24 @@ class ProtoLayer(BaseLayer):
 
         return min + (max - min) * (tensor - tmin) / (tmax - tmin)
 
-    @staticmethod
-    def stretch(frame: pt.Tensor) -> pt.Tensor:
+    def _stretch(
+        self,
+        frame: pt.Tensor,
+    ) -> pt.Tensor:
         """
         Stretch a 2D image into a 1D vector.
         """
 
         # TODO: Handle transparency (4D tensors)?
-        if frame.dim() == 3:
-            # Transpose the depth dimension and stretch
-            return frame.permute(2, 1, 0).flatten()[:, None]
+        # if frame.dim() == 3:
+        #     # Transpose the depth dimension and stretch
+        #     return frame.permute(2, 1, 0).flatten()[:, None]
 
-        return frame.permute(1, 0).flatten()[:, None]
+        # return frame.permute(1, 0).flatten()[:, None]
+        return frame.T.flatten()
 
-    @staticmethod
-    def fold(
+    def _fold(
+        self,
         frame: pt.Tensor,
         h: int,
         w: int,
@@ -618,161 +633,93 @@ class ProtoLayer(BaseLayer):
 
         return padding
 
+    def _compute_ema(
+        self,
+        x: pt.Tensor,
+        mean: pt.Tensor,
+        alpha: pt.Tensor,
+        *args,
+        **kwargs,
+    ):
+        """
+        Exponential runnning average (EMA).
+
+        This is a shortcut version that does not create extra temporary variables.
+        Note that we are not keeping track of the variance, however,
+        the variance-tracking version is included below for future reference
+        (`var` needs to be passed as a function argument).
+
+        diff = x - mean
+        inc = alpha * diff
+        mean += inc
+        sd = None
+
+        if var is not None:
+            var = (1.0 - alpha) * (var + diff * inc)
+            sd = pt.sqrt(var + eps)
+
+        return (mean, sd)
+        """
+
+        return alpha, mean + alpha * (x - mean)
+
+    def _compute_iema(
+        self,
+        x: pt.Tensor,
+        mean: pt.Tensor,
+        alpha: float,
+        dt: float,
+        *args,
+        **kwargs,
+    ):
+        """
+        Irregular version of EMA.
+
+        Here, we use the mean time period as the EMA range.
+
+        References:
+
+        - G. Zumbach and U. Müller (2001), ‘Operators on inhomogeneous time series’, Int. J. Theor. Appl. Finan., vol. 04, no. 01, pp. 147–177.
+        """
+
+        if dt <= 0.0:
+            raise SystemExit("Non-monotonically increasing times detected")
+
+        # Update the running stats for dt
+        mean_dt = self._compute_ema(
+            dt,
+            self.mean_dt,
+            alpha,
+        )
+
+        # Update alpha
+        alpha = pt.exp(-dt / self.mean_dt)
+
+        # Now return the regular EMA but with the new alpha.
+        return self._compute_ema(x, mean, alpha)
+
     def _convolve(
         self,
         frame: pt.Tensor,
-        rf: pt.Tensor,
-        height: int,
-        width: int,
     ) -> pt.Tensor:
         """
         Convolve the input frame with the current layer's receptive field.
-
-        The height and width parameters are necessary to fold the convolved stretched frame
-        back into a 2D frame with the right dimensions.
-
-        Returns:
 
         Args:
             frame (pt.Tensor):
                 The input frame.
 
-            rf (pt.Tensor):
-                Receptive field
-
-            height (int):
-                The height of the folded convolved image.
-
-            width (int):
-                The width of the folded convolved image.
-
         Returns:
             pt.Tensor:
-                A map of the local mean illumination at each pixel.
+                Self-explanatory.
         """
 
-        stretched = self.stretch(frame)
+        # This is the old behaviour using dense frames
+        # TODO: Investigate using SciPy / CuPy
+        # ==================================================
+        # stretched = self._stretch(frame)
+        # mean = pt.mv(self.rfs, stretched)
+        # folded = self._fold(mean, self.h, self.w)
+        # return folded
 
-        mean = pt.mm(rf, stretched)
-
-        folded = self.fold(mean, height, width)
-
-        return folded
-
-    # def _make_rf(
-    #     self,
-    #     ksizes: pt.Tensor,
-    #     rftype: KernelType = KernelType.Proportional,
-    #     scale: float = 1.0,
-    #     norm: bool = False,
-    # ):
-    #     # Compute tensor indices for each kernel size
-    #     indices = {}
-    #     for i in range(ksizes.min(), ksizes.max() + 1):
-    #         indices[i] = pt.where(ksizes == i)
-
-    #     rf_rows = []
-    #     rf_cols = []
-    #     rf_vals = []
-
-    #     for ksize, (rows, cols) in indices.items():
-    #         if rows.numel() == 0:
-    #             continue
-
-    #         # Row and column spans for the current kernel size
-    #         # ==================================================
-    #         kspan = pt.linspace(-ksize // 2 + 1, ksize // 2, ksize)
-    #         # print(f'==[ diff:\n{diff}')
-
-    #         # Rows spanned by stretched kernels
-    #         # ==================================================
-    #         krowspan = (
-    #             (rows[None, :].repeat(ksize, 1) + kspan[:, None])
-    #             .t()
-    #             .repeat(1, ksize)
-    #             .int()
-    #         ).flatten()
-
-    #         # Columns spanned by stretched kernels
-    #         # ==================================================
-    #         kcolspan = (
-    #             (cols[None, :].repeat(ksize, 1) + kspan[:, None])
-    #             .t()
-    #             .repeat_interleave(ksize, dim=1)
-    #             .int()
-    #         ).flatten()
-
-    #         # Boundary check mask
-    #         # ==================================================
-    #         boundary_mask = (
-    #             krowspan.ge(0)
-    #             * krowspan.lt(self.dim.padded.H)
-    #             * kcolspan.ge(0)
-    #             * kcolspan.lt(self.dim.padded.W)
-    #         ).flatten()
-
-    #         # Sparse row and column indices
-    #         # ==================================================
-    #         sp_rows = (
-    #             (cols * self.dim.padded.H + rows)
-    #             .int()[:, None]
-    #             .repeat(1, ksize**2)
-    #             .flatten()
-    #         )
-    #         sp_cols = kcolspan * self.dim.padded.H + krowspan
-
-    #         # Combined sparse indices with boundary check
-    #         # ==================================================
-    #         sp_indices = pt.cat((sp_rows[:, None], sp_cols[:, None]), dim=1)[
-    #             boundary_mask
-    #         ]
-
-    #         sp_rows = sp_indices[:, 0]
-    #         sp_cols = sp_indices[:, 1]
-
-    #         rf_rows.extend(sp_rows.tolist())
-    #         rf_cols.extend(sp_cols.tolist())
-
-    #         if rftype == KernelType.Proportional:
-    #             (rows, cols, kernel) = self._make_gaussian_kernels(
-    #                 ksize,
-    #                 scale,
-    #                 norm,
-    #                 rows,
-    #                 boundary_mask,
-    #             )
-
-    #         elif rftype == KernelType.Gabor:
-    #             kvals = self._make_gaussian_kernels(
-    #                 rftype,
-    #                 boundary_mask=boundary_mask,
-    #             )
-
-    #         elif rftype == KernelType.Proportional:
-    #             (rows, cols, kernel) = self._make_proportional_kernels(
-    #                 ksize,
-    #                 scale,
-    #                 sp_rows,
-    #             )
-
-    #         else:
-    #             raise ValueError(f"Invalid RF type '{rftype}'")
-
-    #         rf_vals.extend(kvals)
-
-    #     rf = pt.sparse_coo_tensor(
-    #         np.array(
-    #             [
-    #                 rf_rows,
-    #                 rf_cols,
-    #             ]
-    #         ),
-    #         np.array(rf_vals),
-    #         size=(
-    #             self.dim.padded.span,
-    #             self.dim.padded.span,
-    #         ),
-    #         dtype=pt.float32,
-    #     )
-
-    #     return rf.coalesce().to_sparse_csr()
+        return pt.mv(self.rfs, frame.T.flatten())
