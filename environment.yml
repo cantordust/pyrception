@@ -1,10 +1,10 @@
 name: pyrception
 channels:
   - pytorch
+  - nvidia
   - conda-forge
 dependencies:
   - python=3.10
-  - cpuonly
   - dotmap
   - h5py
   - ipykernel
@@ -15,10 +15,11 @@ dependencies:
   - pip
   - python-decouple
   - pytorch
+  - pytorch-cuda
   - scikit-image
   - scipy
   - seaborn
   - torchvision
   - tqdm
   - pip:
-    - -e .
+      - -e .
