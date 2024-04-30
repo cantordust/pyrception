@@ -56,7 +56,9 @@ class EventLoader:
 
         if not path.exists():
             if not create:
-                raise SystemExit(f"The specified file '{path}' does not exist. Exiting.")
+                raise SystemExit(
+                    f"The specified file '{path}' does not exist. Exiting."
+                )
 
         return path
 
@@ -154,7 +156,9 @@ class EventLoader:
         # ==================================================
         if use_triggers:
             if self.triggers is None:
-                raise SystemExit(f"Triggers requested but the data does not contain triggers. Exiting.")
+                raise SystemExit(
+                    f"Triggers requested but the data does not contain triggers. Exiting."
+                )
 
             first_ts = self.triggers[0][1]
 
@@ -164,8 +168,16 @@ class EventLoader:
         event_dir = None
         image_dir = None
         if save:
-            event_dir = EventLoader.to_dir(self.root, f"segments/offset_{offset}/duration_{duration}/events", clean=clean)
-            image_dir = EventLoader.to_dir(self.root, f"segments/offset_{offset}/duration_{duration}/images", clean=clean)
+            event_dir = EventLoader.to_dir(
+                self.root,
+                f"segments/offset_{offset}/duration_{duration}/events",
+                clean=clean,
+            )
+            image_dir = EventLoader.to_dir(
+                self.root,
+                f"segments/offset_{offset}/duration_{duration}/images",
+                clean=clean,
+            )
 
         # Seek the first and last event
         # ==================================================
@@ -182,7 +194,11 @@ class EventLoader:
         segments = []
         count = 0
         while first_ts <= last_ts and count < limit:
-            segment = events[np.logical_and(first_ts <= events["t"], events["t"] < first_ts + duration)]
+            segment = events[
+                np.logical_and(
+                    first_ts <= events["t"], events["t"] < first_ts + duration
+                )
+            ]
             segments.append(segment)
             first_ts += duration
             count += 1
@@ -211,6 +227,8 @@ class EventLoader:
                     .T
                 )
 
-                buffer = (2**16 - 1) * ((buffer - buffer.min()) / (buffer.max() - buffer.min()))
+                buffer = (2**16 - 1) * (
+                    (buffer - buffer.min()) / (buffer.max() - buffer.min())
+                )
 
                 cv.imwrite(str(image_dir / f"{idx:06d}.png"), buffer.astype(np.uint16))

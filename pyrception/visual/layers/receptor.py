@@ -43,10 +43,10 @@ class ReceptorLayer(BaseLayer):
         name: str = "Receptor",
     ):
 
-        name = f'{name:<10s}'
+        name = f"{name:<10s}"
         super().__init__(name)
 
-        self.log("Initialising...")
+        self.info("Initialising...")
 
         # Dimensions and resize flag
         self.dims = self._compute_dimensions(
@@ -63,9 +63,9 @@ class ReceptorLayer(BaseLayer):
         if self.flatmask is not None:
             self.dims.comp.depth = 1
 
-        self.log("Initialised.")
+        self.info("Initialised.")
 
-    @logger.catch
+    # @logger.catch
     def make_flatmask(
         self,
         mode: Optional[enum.Enum] = None,
@@ -110,7 +110,7 @@ class ReceptorLayer(BaseLayer):
         #     size=(st_size, st_size),
         # ).to_sparse_csr()
 
-    @logger.catch
+    # @logger.catch
     def process(
         self,
         frame: pt.Tensor,
@@ -123,18 +123,21 @@ class ReceptorLayer(BaseLayer):
     ) -> pt.Tensor:
         """
         Read the input by applying a certain offset:
-        - Read the next frame
-        - (Optional) flatten the frame (remove all channel information)
-        - Get the input padding corresponding to the specified offset (only if saccades are active)
-        - Compute the local contrast normalisation (horizontal cell effect).
+
+        NOTE: The following steps need to be updated.
+        # - Read the next frame
+        # - (Optional) flatten the frame (remove all channel information)
+        # - Get the input padding corresponding to the specified offset (only if saccades are active)
+        # - Compute the local contrast normalisation (horizontal cell effect).
         """
 
-        _views = {View.Original: frame}
+        # _views = {View.Original: frame}
 
-        # Flatten the frame
-        if self.flatmask is not None:
-            frame *= self.flatmask
+        # # Flatten the frame
+        # if self.flatmask is not None:
+        #     frame *= self.flatmask
 
+        # This is where saccades happen!
         if offset is not None:
             padding = self._get_padding(offset[0], offset[1])
             padded = self.pad(frame, padding)
@@ -142,6 +145,7 @@ class ReceptorLayer(BaseLayer):
         else:
             padded = frame
 
+        # Convolve the input with the kernel matrix
         mean = self._convolve(padded, self.rf, self.dims.padded.H, self.dims.padded.W)
 
         if offset is not None:

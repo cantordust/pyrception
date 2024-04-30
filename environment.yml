@@ -8,6 +8,7 @@ dependencies:
   - dotmap
   - h5py
   - ipykernel
+  - ipympl
   - loguru
   - matplotlib
   - numpy

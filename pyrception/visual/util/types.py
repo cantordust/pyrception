@@ -9,6 +9,9 @@ import numpy as np
 # --------------------------------------
 import enum
 
+# --------------------------------------
+import torch as pt
+
 
 class View(enum.Enum):
     """
@@ -35,8 +38,9 @@ class KernelType(enum.Enum):
     for building receptive fields.
     """
 
-    Proportional = enum.auto()
+    Flat = enum.auto()
     Gaussian = enum.auto()
+    DoG = enum.auto()
     Gabor = enum.auto()
 
 
@@ -54,5 +58,19 @@ class Dims:
     comp: Dim = Dim()
     padded: Dim = Dim()
 
-    padding: np.ndarray = np.array([0,0,0,0])
+    padding: np.ndarray = np.array([0, 0, 0, 0])
     resize: bool = False
+
+
+class DType(enum.Enum):
+    Float16 = pt.half
+    Float32 = pt.float
+    Float64 = pt.double
+
+    @staticmethod
+    def get(dtype: str):
+        for dt in DType:
+            if dt.name.lower() == dtype.lower():
+                return dt.value
+
+        raise ValueError(f"Invalid dtype {dtype}")

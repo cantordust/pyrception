@@ -4,7 +4,7 @@ from typing import Union
 from pathlib import Path
 
 # --------------------------------------
-from pyrception.util.functions import curdir
+from pyrception.util.functions import cwd
 from pyrception.visual.util.types import RFSizeDist
 from pyrception.visual.util.types import KernelType
 from pyrception.visual.retina import Retina
@@ -20,7 +20,7 @@ def run(source: Union[str, int]):
         saccades=saccades,
         receptor_args={
             "rfsizedist": RFSizeDist.Gaussian,
-            "rftype": KernelType.Proportional,
+            "rftype": KernelType.Flat,
             "sh": 0.33,
             "sw": 0.33,
             "k_min": 1,
@@ -29,7 +29,7 @@ def run(source: Union[str, int]):
         bipolar_args={
             "alpha": 0.95,
             "rfsizedist": RFSizeDist.Gaussian,
-            "rftype": KernelType.Proportional,
+            "rftype": KernelType.Flat,
             "sh": 0.33,
             "sw": 0.33,
             "k_min": 1,
@@ -37,7 +37,7 @@ def run(source: Union[str, int]):
         },
         ganglion_args={
             "rfsizedist": RFSizeDist.Gaussian,
-            "rftype": KernelType.Proportional,
+            "rftype": KernelType.Flat,
             "sh": 0.33,
             "sw": 0.33,
             "k_min": 1,
@@ -49,7 +49,7 @@ def run(source: Union[str, int]):
         saccades,
         save_video=True,
         save_frames=False,
-        output_path=curdir(__file__) / "output",
+        output_path=cwd(__file__) / "output",
     )
 
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     # * Video file * #
     # Path to the directory containing all sources
-    src_path = curdir(__file__) / "sources"
+    src_path = cwd(__file__) / "sources"
     file = "landing.mp4"
     source = str(src_path / file)
 

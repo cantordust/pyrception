@@ -24,67 +24,23 @@ from pyrception.visual.layers.proto import ProtoLayer
 
 class GanglionLayer(ProtoLayer):
     """
-    A layer of ON- and OFF-type RGCs.
+    A layer of ganglion cells receiving input from bipolar and amacrine cells.
     """
 
     def __init__(
         self,
-        source: BipolarLayer,
-        saccades: bool,
-        k_min: int = 1,
-        k_max: int = 9,
-        mh: Optional[int] = None,
-        mw: Optional[int] = None,
-        sh: int = 1 / 8,
-        sw: int = 1 / 8,
-        rftype: KernelType = KernelType.Proportional,
-        decreasing: bool = False,
-        smooth: bool = True,
-        layer_name: str = "Ganglion",
+        *args,
+        **kwargs,
     ):
 
-        logger.info(f"==[ {layer_name:<8s} ] Initialising layer...")
+        kwargs.setdefault("name", "Ganglion")
+        super().__init__(*args, **kwargs)
+        self.info("Initialised.")
 
-        self.source = source
-
-        # Dimensions and resize flag
-        self.dim = self._compute_dimensions(
-            source.dim.shape,
-            source.dim.H,
-            source.dim.W,
-            saccades,
+        self.feedback = pt.zeros(
+            (self.h, self.w),
+            dtype=conf.dtype,
         )
-
-        (_, centre_ksizes) = self._make_rfs(
-            self.dim.H,
-            self.dim.W,
-            k_min,
-            k_max,
-            mh,
-            mw,
-            sh,
-            sw,
-            decreasing,
-            smooth,
-        )
-
-        surround_ksizes = (centre_ksizes * 2 + 1).int()
-        # surround_ksizes = centre_ksizes
-
-        # Receptive fields.
-        self.rf_centre = self._make_rf(
-            centre_ksizes,
-            rftype=rftype,
-            norm=True,
-        )
-
-        self.rf_surround = self._make_rf(
-            surround_ksizes,
-            rftype=rftype,
-            norm=True,
-        )
-
-        logger.info(f"==[ {layer_name:<8s} ] Initialisation complete.")
 
     def process(
         self,
@@ -105,11 +61,11 @@ class GanglionLayer(ProtoLayer):
         on = views[View.BipolarOn]
         off = views[View.BipolarOff]
 
-        on_center = self._convolve(on, self.rf_centre, self.dim.H, self.dim.W)
-        off_center = self._convolve(off, self.rf_centre, self.dim.H, self.dim.W)
+        on_center = self.convolve(on, self.rf_centre, self.dim.H, self.dim.W)
+        off_center = self.convolve(off, self.rf_centre, self.dim.H, self.dim.W)
 
-        on_surround = self._convolve(on, self.rf_surround, self.dim.H, self.dim.W)
-        off_surround = self._convolve(off, self.rf_surround, self.dim.H, self.dim.W)
+        on_surround = self.convolve(on, self.rf_surround, self.dim.H, self.dim.W)
+        off_surround = self.convolve(off, self.rf_surround, self.dim.H, self.dim.W)
 
         threshold = 15
 

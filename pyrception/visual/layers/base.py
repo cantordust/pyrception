@@ -18,11 +18,17 @@ class BaseLayer:
 
         self.name = name
 
-    def log(
-        self,
-        message: str,
-    ):
-        logger.info(f"{self.name} ] {message}")
+    def debug(self, message: str):
+        logger.debug(f"{self.name} | {message}")
+
+    def info(self, message: str):
+        logger.info(f"{self.name} | {message}")
+
+    def warn(self, message: str):
+        logger.warning(f"{self.name} | {message}")
+
+    def error(self, message: str):
+        logger.error(f"{self.name} | {message}")
 
     def _compute_dimensions(
         self,

@@ -1,17 +1,7 @@
-from typing import Set
-from typing import Dict
-from typing import Tuple
-from typing import Optional
-
-# --------------------------------------
-from loguru import logger
-
-# --------------------------------------
-from pathlib import Path
+from typing import *
 
 # --------------------------------------
 import torch as pt
-import torch.nn.functional as ptf
 
 # --------------------------------------
 from pyrception import conf
@@ -30,6 +20,7 @@ class BipolarLayer(ProtoLayer):
 
     def __init__(
         self,
+        alpha: Union[pt.Tensor, float, int],
         *args,
         **kwargs,
     ):
@@ -37,49 +28,61 @@ class BipolarLayer(ProtoLayer):
         kwargs.setdefault("name", "Bipolar")
         super().__init__(*args, **kwargs)
 
-        # Temporal mean
-        self.tmean = pt.zeros((self.neuron_count,))
+        # ON and OFF pathways
         self.on = pt.zeros((self.neuron_count,))
         self.off = pt.zeros_like(self.on)
 
-        self.log("Initialised.")
+        if not isinstance(alpha, (pt.Tensor, float, int)):
+            raise TypeError(
+                f"The alpha parameter should be a numeric or tensor type (got {type(alpha)})."
+            )
 
-    def process(
+        if isinstance(alpha, (float, int)):
+
+            # Numeric
+            if not (0.0 < alpha < 1.0):
+                raise ValueError(
+                    f"The value of alpha should be between 0 and 1 (got {alpha})."
+                )
+            alpha = pt.full((self.neuron_count,), float(alpha))
+
+        else:
+            # Tensor
+            if not (pt.equal(alpha.shape, self.on.shape)):
+                raise TypeError(
+                    f"The alpha tensor must have the same shape as the ON tensor ({self.on.shape}; got {self.alpha.shape})"
+                )
+
+        # Exponential running mean (temporal mean)
+        # ==================================================
+        self.on_mean = pt.zeros((self.neuron_count,))
+        self.off_mean = pt.zeros((self.neuron_count,))
+
+        # 'Forgetting rate' for the temporal mean
+        self.alpha = alpha
+
+        self.info("Initialised.")
+
+    def __call__(
         self,
-        frame: int,
-        save_frames: Set[int],
-        save_views: Set[View],
-        frame_paths: Optional[Dict[View, Path]],
+        raw: pt.Tensor,
+        horizontal: pt.Tensor,
     ) -> pt.Tensor:
         """
-        Compute the offset from the running mean
-        in both positive and negative direction.
-
-        These define the ON and OFF channels.
+        Split the input into ON and OFF pathways.
         """
 
-        _views = {}
+        # Subtract the raw photoreceptor signal
+        # from the running (temporal) mean
+        scaled = raw - horizontal
 
-        frame = self._convolve(
-            views[View.ReceptorAdapted],
-            self.rf,
-            self.dim.H,
-            self.dim.W,
-        )
-        diff = frame - self.tmean
+        activation = self.convolve(scaled)
 
-        _views[View.BipolarOn] = ptf.relu(diff)
-        _views[View.BipolarOff] = ptf.relu(-diff)
-        _views[View.BipolarCombined] = diff
+        on = pt.relu(activation)
+        off = pt.relu(-activation)
 
         # Update the running mean
-        self.tmean += self.alpha * diff
+        self.on_mean += self.alpha * (on - self.on_mean)
+        self.off_mean += self.alpha * (off - self.off_mean)
 
-        _views[View.BipolarMean] = self.tmean
-
-        if frame in save_frames:
-            self._save_views(_views, frame, save_views, frame_paths)
-
-        views.update(_views)
-
-        # print(f"==[ self.tmean:\n{self.tmean} ({self.tmean.shape})")
+        return (on, off)

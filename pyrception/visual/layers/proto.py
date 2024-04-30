@@ -1,16 +1,4 @@
-from __future__ import annotations
-
-# --------------------------------------
 from typing import *
-
-# --------------------------------------
-from pathlib import Path
-
-# --------------------------------------
-import matplotlib.pyplot as plt
-
-# --------------------------------------
-from loguru import logger
 
 # --------------------------------------
 from skimage import draw
@@ -22,21 +10,14 @@ import numpy as np
 import math
 
 # --------------------------------------
-from dotmap import DotMap
-
-# --------------------------------------
 import torch as pt
 import torch.nn.functional as ptf
-
-# pt.set_printoptions(linewidth=200)
 
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
-from functools import partial
-
-# --------------------------------------
+from pyrception.conf import logger
 from pyrception import conf
 from pyrception.visual.util.types import KernelType
 from pyrception.visual.layers.base import BaseLayer
@@ -49,9 +30,9 @@ class ProtoLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: Tuple[int, int],
-        sectors: int = 36,
-        kernel_type: KernelType = KernelType.Proportional,
+        shape: Tuple[int, ...],
+        sectors: int = 32,
+        kernel_type: KernelType = KernelType.Flat,
         kernel_scale: float = 1.0,
         kernel_params: Dict[str, Any] = None,
         min_kernel_size: int = 1,
@@ -60,14 +41,13 @@ class ProtoLayer(BaseLayer):
         kernel_cutoff: float = 1e-3,
         inverse: bool = False,
         dense: bool = False,
-        tau: Union[float, pt.Tensor] = 10.0,  # ms
         name: str = "Proto",
     ):
 
         name = f"{name:<10s}"
         super().__init__(name)
 
-        self.log("Initialising...")
+        self.info("Initialising...")
 
         if kernel_params is None:
             kernel_params = {}
@@ -88,16 +68,7 @@ class ProtoLayer(BaseLayer):
 
         # Kernel factory
         # ==================================================
-        self.kernel_function = None
-
-        if kernel_type == KernelType.Proportional:
-            self.kernel_function = self._make_proportional_kernels
-
-        elif kernel_type == KernelType.Gaussian:
-            self.kernel_function = self._make_gaussian_kernels
-
-        elif kernel_type == KernelType.Gabor:
-            self.kernel_function = self._make_gabor_kernels
+        self.kernel_function = self._get_kernel_function(kernel_type)
 
         # Internal parameters used for constructing kernels
         # ==================================================
@@ -112,18 +83,26 @@ class ProtoLayer(BaseLayer):
         self.neuron_count = 0
         self.rf_factors = None
 
-        # Running statistics
-        # ==================================================
-        self.mean_dt = 0.0
+        self._make_eccentric_rfs(inverse, dense)
 
-        # Tau and alpha don't change
-        self.tau = tau
-        self.alpha = 1 / (1 + tau)
+    def _get_kernel_function(
+        self,
+        kernel_type: KernelType = KernelType.Flat,
+    ):
 
-        # Beta is the adaptive version of alpha
-        self.beta = self.alpha.clone()
+        kernel_functions = {
+            KernelType.Flat: self._make_flat_kernels,
+            KernelType.Gaussian: self._make_gaussian_kernels,
+            KernelType.DoG: self._make_dog_kernels,
+            KernelType.Gabor: self._make_gabor_kernels,
+        }
 
-        self._make_rfs(inverse, dense)
+        kernel_function = kernel_functions.get(kernel_type, None)
+
+        if kernel_function is None:
+            raise TypeError(f"Invalid kernel type '{kernel_type}'")
+
+        return kernel_function
 
     def _make_mesh(self) -> pt.Tensor:
         if self.Xs is not None:
@@ -151,7 +130,7 @@ class ProtoLayer(BaseLayer):
 
         return indices
 
-    def _make_proportional_kernels(
+    def _make_flat_kernels(
         self,
         mx: int,
         my: int,
@@ -180,7 +159,9 @@ class ProtoLayer(BaseLayer):
 
         if rows.numel() > 0:
             if fill is None:
-                # fill = radius**-2
+                # This effectively takes the *mean* of the input
+                # within the receptive field.
+                # Useful for horizontal cells.
                 fill = 1 / rows.numel()
             values = [fill] * rows.shape[0]
 
@@ -234,6 +215,62 @@ class ProtoLayer(BaseLayer):
             # Return the kernel indices and values
             return (rows, cols, values)
 
+    def _make_dog_kernels(
+        self,
+        mx: int,
+        my: int,
+        sd: float,
+        scale: float = 1,
+    ) -> Tuple[pt.Tensor, pt.Tensor]:
+        """
+        2D difference-of-Gaussians (DoG) kernels with given mean and SD.
+
+        Returns:
+            Tuple[pt.Tensor, pt.Tensor]:
+                Values and indices of the kernel (suitable for a sparse tensor).
+        """
+
+        # Gaussian distribution
+        sd *= scale
+
+        sd_narrow = sd / 2
+        sd_wide = sd
+
+        values_narrow = pt.exp(
+            -0.5 * (((self.Xs - mx) / sd_narrow) ** 2 + ((self.Ys - my) / sd_narrow) ** 2)
+        )
+        values_wide = pt.exp(
+            -0.5 * (((self.Xs - mx) / sd_wide) ** 2 + ((self.Ys - my) / sd_wide) ** 2)
+        )
+
+        # Limit the kernel to values where the *wide* Gaussian is above the cutoff
+        k_idx = pt.argwhere(values_wide >= self.kernel_cutoff)
+
+        # Cut off coordinates that do not fit into the image
+        coords = self._trim(k_idx)
+        (cols, rows) = coords[:, 0], coords[:, 1]
+
+        # Normalise
+        values_narrow /= 2 * pt.pi * sd_narrow**2
+        values_wide /= 2 * pt.pi * sd_wide**2
+
+        # DoG
+        values = values_narrow - values_wide
+
+        if rows.numel() > 0:
+            values = values[cols, rows].flatten()
+            values_wide = values_wide[cols, rows].flatten()
+
+            # Limit to reasonable values that are not too small
+            limit = 0.01 * values_wide.max()
+            limit_coords = values_wide >= limit
+            values = values[limit_coords]
+            rows = rows[limit_coords]
+            cols = cols[limit_coords]
+
+            # Return the kernel indices and values
+            return (rows, cols, values)
+
     def _make_gabor_kernels(
         self,
         mx: int,
@@ -248,13 +285,26 @@ class ProtoLayer(BaseLayer):
         WIP - do not use!
 
         Args:
-            mx (int): _description_
-            my (int): _description_
-            sd (float): _description_
-            orientation (float, optional): _description_. Defaults to 0.0.
-            frequency (float, optional): _description_. Defaults to 0.1
-            aspect (float, optional): _description_. Defaults to 0.1
-            phase (float, optional): _description_. Defaults to 0.0
+            mx (int):
+                _description_
+
+            my (int):
+                _description_
+
+            sd (float):
+                _description_
+
+            orientation (float, optional):
+                _description_. Defaults to 0.0.
+
+            frequency (float, optional):
+                _description_. Defaults to 0.1
+
+            aspect (float, optional):
+                _description_. Defaults to 0.1
+
+            phase (float, optional):
+                _description_. Defaults to 0.0
 
         Returns:
             Tuple[pt.Tensor, pt.Tensor]:
@@ -384,18 +434,25 @@ class ProtoLayer(BaseLayer):
         # Trim coordinates that fall outside the image boundaries
         coords = self._trim(coords)
 
+        centered_coords = coords - pt.tensor([w2, h2])
+        rs = pt.sqrt(
+            pt.pow(centered_coords[:, 0], 2) + pt.pow(centered_coords[:, 1], 2)
+        )
+        sorted = pt.argsort(rs, stable=True)
+        coords = coords[sorted]
+
         # Maximal RF size
         if inverse:
-            # TODO:
+            # TODO
             # This needs to be changed, right now
             # it's the same as the other branch
-            rf_width = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
+            max_rf_width = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
         else:
-            rf_width = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
+            max_rf_width = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
 
-        return (coords, rf_width)
+        return (coords, max_rf_width)
 
-    def _make_rfs(
+    def _make_eccentric_rfs(
         self,
         inverse: bool = False,
         dense: bool = False,
@@ -419,7 +476,7 @@ class ProtoLayer(BaseLayer):
                     It increases memory conumption substantially!
         """
 
-        self.log("Creating receptive fields...")
+        self.debug("Creating receptive fields...")
 
         # Coordinates of the central pixel
         w2 = self.w // 2
@@ -439,17 +496,17 @@ class ProtoLayer(BaseLayer):
             else rho_max * self.fovea_ratio
         )
 
-        # Prepare the mesh
+        # Prepare the coordinate mesh
         self._make_mesh()
 
         # Compute the coordinates and the RF size ratio
         if not dense:
-            (coords, rf_width) = self._make_sparse_coordinates(
+            (coords, max_rf_width) = self._make_sparse_coordinates(
                 w2, h2, rho_max, rho_fovea, inverse
             )
         else:
             # TODO: A dense version
-            (coords, rf_width) = self._make_sparse_coordinates(
+            (coords, max_rf_width) = self._make_sparse_coordinates(
                 w2, h2, rho_max, rho_fovea, inverse
             )
 
@@ -464,7 +521,7 @@ class ProtoLayer(BaseLayer):
 
         extent = rho_max if self.extent is None else self.extent * rho_max
 
-        for idx, (rx, ry) in enumerate(coords):
+        for rx, ry in coords:
             cdist = pt.sqrt((rx - w2) ** 2 + (ry - h2) ** 2)
             # print(f"==[ {rx, ry}")
 
@@ -474,12 +531,14 @@ class ProtoLayer(BaseLayer):
             if inverse:
                 radius = max(
                     self.min_kernel_size,
-                    self.kernel_scale * rf_width * (rho_max - cdist),
+                    self.kernel_scale * max_rf_width * (rho_max - cdist),
                 )
                 if radius < 3:
                     continue
             else:
-                radius = max(self.min_kernel_size, self.kernel_scale * rf_width * cdist)
+                radius = max(
+                    self.min_kernel_size, self.kernel_scale * max_rf_width * cdist
+                )
 
             result = self.kernel_function(
                 rx,
@@ -528,10 +587,11 @@ class ProtoLayer(BaseLayer):
                     len(indices),
                     self.dims.comp.span,
                 ),
-                dtype=pt.float32,
+                dtype=conf.dtype,
             )
             .coalesce()
             .to_sparse_csr()
+            .to(conf.device)
         )
 
         self.rows = rows
@@ -551,7 +611,7 @@ class ProtoLayer(BaseLayer):
         ]:
             d[coord] += 1
 
-        rf_factors = pt.zeros((self.h, self.w), dtype=pt.float32)
+        rf_factors = pt.zeros((self.h, self.w), dtype=conf.dtype)
 
         for (y, x), v in d.items():
             rf_factors[y, x] += v
@@ -561,7 +621,7 @@ class ProtoLayer(BaseLayer):
         self.rfs = rfs
         self.neuron_count = neuron_count
 
-        self.log("Receptive fields created.")
+        self.debug(f"Receptive fields created for {self.neuron_count} neurons.")
 
     @staticmethod
     def pad(
@@ -610,12 +670,12 @@ class ProtoLayer(BaseLayer):
 
         # TODO boundary checks
 
-        # wop: width offset pixels
-        # hop: height offset pixels
-        wop = int(
+        # wpo: width-wise pixel offset
+        # hpo: height-wise pixel offset
+        wpo = int(
             np.sign(width_offset) * math.floor(math.fabs(width_offset) * self.dim.W)
         )
-        hop = int(
+        hpo = int(
             np.sign(height_offset) * math.floor(math.fabs(height_offset) * self.dim.H)
         )
 
@@ -623,10 +683,10 @@ class ProtoLayer(BaseLayer):
             self.dim.padding
             + np.array(
                 [
-                    hop,
-                    -hop,
-                    wop,
-                    -wop,
+                    hpo,
+                    -hpo,
+                    wpo,
+                    -wpo,
                 ]
             ).tolist()
         )
@@ -698,7 +758,7 @@ class ProtoLayer(BaseLayer):
         # Now return the regular EMA but with the new alpha.
         return self._compute_ema(x, mean, alpha)
 
-    def _convolve(
+    def convolve(
         self,
         frame: pt.Tensor,
     ) -> pt.Tensor:
@@ -714,12 +774,13 @@ class ProtoLayer(BaseLayer):
                 Self-explanatory.
         """
 
-        # This is the old behaviour using dense frames
-        # TODO: Investigate using SciPy / CuPy
+        # This is the old behaviour using dense frames.
         # ==================================================
         # stretched = self._stretch(frame)
         # mean = pt.mv(self.rfs, stretched)
         # folded = self._fold(mean, self.h, self.w)
         # return folded
 
+        # TODO: Investigate SciPy / CuPy
+        # ==================================================
         return pt.mv(self.rfs, frame.T.flatten())
