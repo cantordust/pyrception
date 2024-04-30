@@ -611,7 +611,7 @@ class ProtoLayer(BaseLayer):
         ]:
             d[coord] += 1
 
-        rf_factors = pt.zeros((self.h, self.w), dtype=conf.dtype)
+        rf_factors = pt.zeros((self.h, self.w), dtype=conf.dtype, device=conf.device)
 
         for (y, x), v in d.items():
             rf_factors[y, x] += v

@@ -31,7 +31,7 @@ class HorizontalLayer(ProtoLayer):
         # The feedback signal (spatial mean) fed
         # back to the receptors.
         # ==================================================
-        feedback = pt.zeros((self.h, self.w), dtype=conf.dtype)
+        feedback = pt.zeros((self.h, self.w), dtype=conf.dtype, device=conf.device)
         for idx, (rows, cols) in enumerate(zip(self.rows, self.cols)):
             feedback[rows, cols] += activation[idx]
 

@@ -44,7 +44,7 @@ class BipolarLayer(ProtoLayer):
                 raise ValueError(
                     f"The value of alpha should be between 0 and 1 (got {alpha})."
                 )
-            alpha = pt.full((self.neuron_count,), float(alpha))
+            alpha = pt.full((self.neuron_count,), float(alpha), device=conf.device)
 
         else:
             # Tensor
@@ -53,10 +53,12 @@ class BipolarLayer(ProtoLayer):
                     f"The alpha tensor must have the same shape as the ON tensor ({self.on.shape}; got {self.alpha.shape})"
                 )
 
+            alpha = alpha.to(conf.device)
+
         # Exponential running mean (temporal mean)
         # ==================================================
-        self.on_mean = pt.zeros((self.neuron_count,))
-        self.off_mean = pt.zeros((self.neuron_count,))
+        self.on_mean = pt.zeros((self.neuron_count,), device=conf.device)
+        self.off_mean = pt.zeros((self.neuron_count,), device=conf.device)
 
         # 'Forgetting rate' for the temporal mean
         self.alpha = alpha
