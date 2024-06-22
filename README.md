@@ -1,63 +1,23 @@
 # Overview
-Pyrception provides an easy way to interface various types of input data with neural networks.
+Pyrception aims to serve as a simulation and conversion framework for different perceptual modalities (visual, auditory, olfactory, etc.). Although it is not the primary objective, it can also serve as an input conversion library for encoding raw multimodal sensory input into a uniform spike train suitable for processing with spiking neural networks.
+
+At this stage, only the visual package is implemented. The auditory and olfactory packages are work in progress. If you think you can help with implementation, please reach out - contributions are welcome!
 
 ## Installation
-Install Pyrception as a local package
+Currently, Pyrception is not released as a PyPI or Conda package. You can install Pyrception as a local package in development mode by cloning the Git repository and creating a Conda environment using the provided `environment.yml` file.
 
-`$ pip install --user pyrception`
-
-**Or** if you would like to be able to modify the source:
-
-`$ pip install --user -e .`
-
-If you are in a virtual environment, you can skip the `--user` part. All requirements should be installed automatically.
+`$> conda env create -f environment.yml`
 
 # ToDo
 
 ## Short-term
-- Receptor adaptation following Weber's law
-- Proper saccadian movements
-- Retinal ganglion cells
+Visual package:
+- [X] Receptor signal scaling following Weber's law
+- [X] Retinal ganglion cells
+- [ ] Saccadic movements (WIP)
+- [ ] Colour vision (with colour opponency)
 
-# Example
-A very simple example using visual module:
-
-```python
-
-import cv2 as cv
-from pyrception.visual.util.types import KernelSizeDist
-from pyrception.visual.retina import Retina
-
-def test():
-
-    src = cv.VideoCapture(0)
-
-    saccades = False
-
-    ksizedist = KernelSizeDist.LogPolar
-
-    retina = Retina(
-        src,
-        scaled_height=128,
-        saccades=saccades,
-        receptor_args={
-            "kdist": ksizedist,
-            "sh": 1 / 8,
-            "sw": 1 / 8,
-        },
-        bipolar_args={
-            "alpha": 0.1,
-            "kdist": ksizedist,
-        },
-        ganglion_args={
-            "kdist": ksizedist,
-        },
-    )
-
-    retina.run(saccades=saccades)
-
-
-if __name__ == "__main__":
-    test()
-
-```
+## Mid-term
+- [ ] Auditory package (WIP)
+- [ ] Olfactory package (WIP)
+- [ ] Investigate alternative backends for sparse matrix operations (e.g., CuPy, Trilinos, etc.)

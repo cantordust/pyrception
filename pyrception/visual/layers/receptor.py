@@ -1,86 +1,318 @@
 from typing import *
 
 # --------------------------------------
-from loguru import logger
-
-# --------------------------------------
-import enum
-
-# --------------------------------------
-from pathlib import Path
+import torch as pt
+from torch.nn import functional as ptf
+from torch.distributions import OneHotCategorical
 
 # --------------------------------------
 import numpy as np
 
 # --------------------------------------
-import torch as pt
-from torch.distributions import OneHotCategorical
+import math
 
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
-from pyrception.visual.util.types import View
-from pyrception.visual.util.types import Dim
-from pyrception.visual.util.types import Dims
+from pyrception import conf
+from pyrception.visual import Dim
+from pyrception.visual import Dims
 from pyrception.visual.layers.base import BaseLayer
+from pyrception.visual.rf import ReceptiveFields
 
 
 class ReceptorLayer(BaseLayer):
     """
     A layer of receptors.
 
-    This layer applies the first processing steps to the raw input.
+    This layer applies the first processing steps to the raw input,
+    including saccades and RGB to grayscale conversion.
+
+    TODO
+    Fix the flatmask so that we can use 3D inputs.
     """
 
     def __init__(
         self,
-        shape: Tuple[int, int, int],
-        height: int = None,
-        width: int = None,
+        size: Tuple[int, ...],
         saccades: bool = False,
-        mode: Optional[enum.Enum] = cv.COLOR_RGB2GRAY,
+        mode: Optional[int] = cv.COLOR_RGB2GRAY,
         name: str = "Receptor",
     ):
 
-        name = f"{name:<10s}"
-        super().__init__(name)
+        # Initialise the base
+        super().__init__(size, name)
 
-        self.info("Initialising...")
+        self.saccades = saccades
+        self.mode = mode  # TODO: Connect this to the dimensionality of the input.
 
-        # Dimensions and resize flag
-        self.dims = self._compute_dimensions(
-            shape,
-            height,
-            width,
-            saccades,
-        )
+        # Dimensionality of the input.
+        # The padded version is used for saccades.
+        self.dims = self._compute_dimensions()
 
         # Create a flatmask
-        self.flatmask = self.make_flatmask(mode)
+        self.flatmask = self._make_flatmask(mode)
 
-        # Change the depth of the processed frame.
-        if self.flatmask is not None:
-            self.dims.comp.depth = 1
+        # Receptive fields
+        self.rfs = ReceptiveFields(
+            self.size,
+            name=f"{name} RFs",
+        )
+
+        # Receptor activation
+        self.activation = None
 
         self.info("Initialised.")
 
-    # @logger.catch
-    def make_flatmask(
+    def _compute_dimensions(self) -> Dims:
+        """
+        Compute the dimensions for the input, with optional padding
+        if saccades are enabled.
+
+        Returns:
+            Dims:
+                Dimensions of the visual field, optionally padded.
+        """
+        # This is just for convenience
+        (height, width, depth) = self.size
+
+        dims = Dims(Dim(height, width, depth))
+
+        # Left and right padding
+        lr_padding = (width // 2 + width % 2) if self.saccades else 0
+
+        # Top and bottom padding
+        tb_padding = (height // 2 + height % 2) if self.saccades else 0
+
+        dims.padded.width = width + 2 * lr_padding
+        dims.padded.height = height * depth + 2 * tb_padding
+        dims.padded.depth = depth
+        dims.padded.span = dims.padded.width * dims.padded.height * dims.padded.depth
+
+        # The frame is padded only at the top and the bottom,
+        # but the left and right padding values are used
+        # to compute the size of the retinal field below.
+        dims.padding = np.array([lr_padding, lr_padding, tb_padding, tb_padding])
+
+        return dims
+
+    def _pad(
         self,
-        mode: Optional[enum.Enum] = None,
-    ):
+        frame: pt.Tensor,
+        padding: Tuple[int, int, int, int],
+    ) -> pt.Tensor:
+        """
+        Pad the frame so that we can shift the FOV
+        without making the frame 'jump'.
+        This is part of the implementation of saccadic movements.
+
+        Args:
+            frame (pt.Tensor):
+                Frame to be padded.
+
+            padding (Tuple[int, int, int, int]):
+                Padding extents in PyTorch order (left, right, top, bottom).
+
+        Returns:
+            pt.Tensor:
+                The padded frame.
+        """
+
+        padded = ptf.pad(frame, padding)
+
+        return padded
+
+    def _unpad(
+        self,
+        tensor: pt.Tensor,
+        padding: Tuple[int, int, int, int],
+    ) -> pt.Tensor:
+        """
+        Unpad a frame padded with _pad().
+
+        Args:
+            tensor (pt.Tensor):
+                Padded tensor.
+
+            padding (Tuple[int, int, int, int]):
+                Amount of padding in PyTorch order (left, right, top, bottom).
+
+        Returns:
+            pt.Tensor:
+                Unpadded tensor.
+        """
+
+        return tensor[
+            padding[2] : -padding[3],
+            padding[0] : -padding[1],
+        ]
+
+    def _as_image(
+        self,
+        tensor: pt.Tensor,
+    ) -> pt.Tensor:
+        """
+        Convert a tensor to an 8-bit image frame.
+
+        Args:
+            tensor (pt.Tensor):
+                Frame to be converted into an 8-bit integer NumPy array.
+
+        Returns:
+            pt.Tensor:
+                The 8-bit frame.
+        """
+
+        tmin = tensor.min()
+
+        return (255 * (tensor - tmin) / (tensor.max() - tmin + 1e-8)).type(pt.uint8)
+
+    def _scale(
+        self,
+        tensor: pt.Tensor,
+        min: Optional[float] = 0.0,
+        max: Optional[float] = 255.0,
+    ) -> pt.Tensor:
+        """
+        Min-max normalised version of the frame.
+
+        Args:
+            tensor (pt.Tensor):
+                The tensor to be normalised.
+
+            min (Optional[float], optional):
+                Minimal value. Defaults to 0.0.
+
+            max (Optional[float], optional):
+                Maximal value. Defaults to 255.0.
+
+        Returns:
+            pt.Tensor:
+                The normalised tensor.
+        """
+
+        tmin = tensor.min()
+        tmax = tensor.max()
+
+        return min + (max - min) * (tensor - tmin) / (tmax - tmin)
+
+    def _stretch(
+        self,
+        tensor: pt.Tensor,
+    ) -> pt.Tensor:
+        """
+        Stretch a 2D or 3D input (image) into a 1D vector.
+
+        Args:
+            tensor (pt.Tensor):
+                The tensor to flatten.
+
+        Returns:
+            pt.Tensor:
+                The flattened tensor
+        """
+
+        # TODO: 3D -> 2D
+        # TODO: Colour opponency?
+        # TODO: Handle transparency (4D tensors)?
+        # if frame.dim() == 3:
+        #     # Transpose the depth dimension and stretch
+        #     return frame.permute(2, 1, 0).flatten()[:, None]
+
+        return tensor.flatten()
+
+    def _fold(
+        self,
+        tensor: pt.Tensor,
+        height: int,
+        width: int,
+    ) -> pt.Tensor:
+        """
+        Fold a 1D vector into a 2D tensor.
+
+        Args:
+            tensor (pt.Tensor):
+                Tensor to be folded.
+
+            height (int):
+                Height of the resulting tensor.
+
+            width (int):
+                Width of the resulting tensor.
+
+        Returns:
+            pt.Tensor:
+                The folded tensor.
+        """
+
+        return tensor.reshape(width, height)
+
+    def _get_padding(
+        self,
+        height_offset: float = 0.0,
+        width_offset: float = 0.0,
+    ) -> Tuple[int, ...]:
+        """
+        Compute the horizontal and vertical offsets
+        from the width and height offset values and
+        then compute the padding values from the offsets.
+
+        Args:
+            height_offset (float, optional):
+                Offset to move in the height direction. Defaults to 0.0.
+
+            width_offset (float, optional):
+                Offset to move in the width direction. Defaults to 0.0.
+
+        Returns:
+            Tuple[int, ...]:
+                A tuple containing the padding in PyTorch order (left, right, top, bottom).
+        """
+
+        # TODO
+        # Boundary checks.
+
+        # wpo: width-wise pixel offset
+        # hpo: height-wise pixel offset
+        wpo = int(
+            np.sign(width_offset)
+            * math.floor(math.fabs(width_offset) * self.dims.original.width)
+        )
+        hpo = int(
+            np.sign(height_offset)
+            * math.floor(math.fabs(height_offset) * self.dims.original.height)
+        )
+
+        padding = tuple(self.dims.padding + np.array([hpo, -hpo, wpo, -wpo]).tolist())
+
+        return padding
+
+    def _make_flatmask(
+        self,
+        mode: Optional[int] = None,
+    ) -> pt.Tensor:
         """
         Create a mask that can be used to obtain a flattened
         version of the original image with colour channel sampling.
+
+        WIP: Needs to be tested.
+
+        Args:
+            mode (Optional[int], optional):
+                Masking mode. Defaults to None.
+
+        Returns:
+            pt.Tensor:
+                The mask to be applied to the raw input.
         """
 
-        if self.dims.orig.depth == 1 or mode is None:
+        if self.dims.original.depth == 1 or mode is None:
             return
 
-        print(f"==[ Creating flatmask...")
+        # print(f"==[ Creating flatmask...")
 
-        probs = pt.zeros((self.dims.H, self.dims.W, self.dims.D))
+        probs = pt.zeros(self.size, dtype=conf.dtype)
 
         r_prob = 0.475
         g_prob = 0.475
@@ -94,70 +326,41 @@ class ReceptorLayer(BaseLayer):
 
         return ohc.sample()
 
-        # print(f"==[ R: {self.flatmask[:,:,0].sum()}")
-        # print(f"==[ G: {self.flatmask[:,:,1].sum()}")
-        # print(f"==[ B: {self.flatmask[:,:,2].sum()}")
-
-        # # Create the actual tensor
-        # self.st = pt.sparse_coo_tensor(
-        #     np.array(
-        #         [
-        #             sparse_rows,
-        #             sparse_cols,
-        #         ]
-        #     ),
-        #     np.array(sparse_vals),
-        #     size=(st_size, st_size),
-        # ).to_sparse_csr()
-
-    # @logger.catch
-    def process(
+    def forward(
         self,
         frame: pt.Tensor,
-        offset: Optional[Tuple[float, float]],
-        views: Dict[View, pt.Tensor],
-        n_frame: int,
-        save_frames: Set[int],
-        save_views: Set[View],
-        frame_paths: Optional[Dict[View, Path]],
+        offset: Optional[Tuple[float, float]] = None,
     ) -> pt.Tensor:
         """
-        Read the input by applying a certain offset:
+        Read the input and apply a certain offset if saccades are enabled.
 
-        NOTE: The following steps need to be updated.
-        # - Read the next frame
-        # - (Optional) flatten the frame (remove all channel information)
-        # - Get the input padding corresponding to the specified offset (only if saccades are active)
-        # - Compute the local contrast normalisation (horizontal cell effect).
+        Args:
+            frame (pt.Tensor):
+                The raw input.
+
+            offset (Optional[Tuple[float, float]], optional):
+                Padding for saccades. Defaults to None.
+
+        Returns:
+            pt.Tensor:
+                The frame with optional padding (for saccades).
         """
 
-        # _views = {View.Original: frame}
-
-        # # Flatten the frame
-        # if self.flatmask is not None:
-        #     frame *= self.flatmask
-
-        # This is where saccades happen!
         if offset is not None:
+            # This is where saccades happen!
+
+            # WIP
+            # This needs to be revised because the frame
+            # needs to be unrolled properly.
+            # ==================================================
             padding = self._get_padding(offset[0], offset[1])
-            padded = self.pad(frame, padding)
+            frame = ptf.pad(frame, padding)
 
-        else:
-            padded = frame
+            patch = frame[
+                padding[2] : -padding[3],
+                padding[0] : -padding[1],
+            ]
 
-        # Convolve the input with the kernel matrix
-        mean = self._convolve(padded, self.rf, self.dims.padded.H, self.dims.padded.W)
+        self.activation = frame.flatten()
 
-        if offset is not None:
-            mean = self.unpad(mean, padding)
-
-        _views[View.ReceptorMean] = mean
-
-        # Subtract the mean and scale
-        adapted = frame - mean
-        _views[View.ReceptorAdapted] = adapted
-
-        if n_frame in save_frames:
-            self._save_views(_views, n_frame, save_views, frame_paths)
-
-        views.update(_views)
+        return self.activation

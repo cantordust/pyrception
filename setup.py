@@ -1,19 +1,9 @@
 from distutils.core import setup
 
-# --------------------------------------
-from enum import IntEnum
-
-
-class Version(IntEnum):
-    major = 0
-    minor = 0
-    patch = 2
-
-
 setup(
     name="Pyrception",
     author="Alexander Hadjiivanov",
-    version=f"{Version.major}.{Version.minor}.{Version.patch}",
+    version="0.2.1",
     packages=["pyrception"],
     install_requires=[],
     license="MIT",

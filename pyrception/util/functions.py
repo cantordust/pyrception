@@ -35,9 +35,9 @@ plt.rcParams.update(
 
 # --------------------------------------
 import pyrception.util.functions as pcf
-
-
-cmap = cm["gray"]
+from pyrception.visual.util.types import PlotEntry
+from pyrception.visual.util.types import ImagePlot
+from pyrception.visual.util.types import ScatterPlot
 
 
 def cwd(path: Union[Path, str]):
@@ -64,28 +64,70 @@ def timestamp(ms: bool = False) -> str:
 
 
 def plot(
-    entries: List[List[Dict[str, Any]]] = None,
+    entries: List[List[PlotEntry]] = None,
     height: int = 8,
     width: int = 10,
     scale: int = 1,
     figsize: Tuple[int] = None,
     fig: plt.Figure = None,
     axes: plt.Axes = None,
-    spines: bool = False,
     animated: bool = False,
+    cmap: str = None,
     dpi: int = 96,
-):
+) -> Tuple[plt.Figure, plt.Axes, List]:
+    """
+    Plot images in a row, column or grid pattern.
 
+    Args:
+        entries (List[List[Dict[str, Any]]], optional):
+            Data items to plot. Defaults to None.
+
+        height (int, optional):
+            Height of a single plot. Defaults to 8.
+
+        width (int, optional):
+            Width of a single plot. Defaults to 10.
+
+        scale (int, optional):
+            Scale of the plot. Defaults to 1.
+
+        figsize (Tuple[int], optional):
+            Figure size. Defaults to None.
+            If this is not provided, the figure size is computed from the width and height.
+
+        fig (plt.Figure, optional):
+            Optional preexisting Figure instance. Defaults to None.
+
+        axes (plt.Axes, optional):
+            Optional preexisting Axes instance. Defaults to None.
+
+        animated (bool, optional):
+            Toggle indicating if the plot would be used for animation. Defaults to False.
+
+        cmap (str, optional):
+            The colour map to use for plots. Defaults to None.
+
+        dpi (int, optional):
+            DPI setting. Defaults to 96.
+            Used for computing the figure size from the width and the height.
+
+    Returns:
+        Tuple[plt.Figure, plt.Axes, List]:
+            A tuple containing:
+                1. A Figure object.
+                2. An Axes object.
+                3. A list of mappables (which can be used for animations).
+    """
     rows = 1
     cols = 1
 
     if entries is None:
         entries = []
-    if len(entries) > 0:
-        if isinstance(entries, (Dict, np.ndarray, pt.Tensor)):
+    else:
+        if isinstance(entries, (PlotEntry, np.ndarray, pt.Tensor)):
             entries = [[entries]]
 
-        elif isinstance(entries[0], (Dict, np.ndarray, pt.Tensor)):
+        elif isinstance(entries[0], (PlotEntry, np.ndarray, pt.Tensor)):
             entries = [entries]
 
         rows = len(entries)
@@ -107,64 +149,58 @@ def plot(
             for cidx, entry in enumerate(row):
 
                 if isinstance(entry, (np.ndarray, pt.Tensor)):
-                    # Expand shortcut entries
-                    entry = {"data": entry}
+                    # Expand shortcut entries.
+                    # Assume a scatter plot if the array is 1D,
+                    # otherwise assume an image.
+                    entry = ScatterPlot(entry) if len(entry.shape) == 1 else ImagePlot(entry)
 
-                data = entry["data"]
-                plottype = entry.get("type", "image")
-                entry.setdefault("axis", False)
-                entry.setdefault("colorbar", False)
-                entry.setdefault("clim", (None, None))
-
-                if plottype == "scatter":
-                    entry.setdefault("c", "#00ffff")
-                    entry.setdefault("s", 0.1)
+                if entry.plottype is None:
+                    raise ValueError(f"Invalid plot type for entry {entry}.")
 
                 if rows == 1:
                     ax = axes if cols == 1 else axes[cidx]
                 else:
                     ax = axes[ridx] if cols == 1 else axes[ridx, cidx]
 
-                ax.spines["top"].set_visible(spines)
-                ax.spines["right"].set_visible(spines)
-                ax.spines["bottom"].set_visible(spines)
-                ax.spines["left"].set_visible(spines)
+                if isinstance(cmap, str):
+                    cmap = cm[cmap]
 
-                if plottype == "image":
+                if entry.axis:
+                    ax.axis("on")
+                else:
+                    ax.xaxis.set_ticks([])
+                    ax.yaxis.set_ticks([])
+
+                ax.spines[:].set_visible(entry.spines)
+
+                if isinstance(entry, ImagePlot):
                     mappable = ax.imshow(
-                        data,
+                        entry.data,
                         cmap=cmap,
                         animated=animated,
-                        vmin=entry['clim'][0],
-                        vmax=entry['clim'][1],
+                        vmin=entry.clim[0],
+                        vmax=entry.clim[1],
                     )
 
-                elif plottype == "scatter":
-                    mappable = ax.scatter(
-                        pt.arange(len(data)),
-                        data,
-                        s=entry["s"],
-                        c=entry["c"],
+                elif isinstance(entry, ScatterPlot):
+                    (mappable,) = ax.plot(
+                        pt.arange(len(entry.data)),
+                        entry.data,
+                        marker=entry.marker,
+                        markersize=entry.size,
+                        c=entry.colour,
+                        linestyle="None",
                         animated=animated,
                     )
 
-                if not entry["axis"]:
-                    ax.axis("off")
-
-                if entry["colorbar"]:
+                if entry.colourbar:
                     divider = make_axes_locatable(ax)
                     cax = divider.append_axes("right", size="5%", pad=0.05)
-                    plt.colorbar(mappable, ax=ax, cax=cax)
+                    fig.colorbar(mappable, ax=ax, cax=cax)
 
-                if "xlabel" in entry:
-                    ax.set_xlabel(entry["xlabel"])
-
-                if "ylabel" in entry:
-                    ax.set_ylabel(entry["ylabel"])
-
-                if "title" in entry:
-                    ax.set_title(entry["title"])
-
+                ax.set_xlabel(entry.xlabel)
+                ax.set_ylabel(entry.ylabel)
+                ax.set_title(entry.title)
                 mappables.append(mappable)
 
         if fig is not None:
@@ -182,7 +218,42 @@ def animate(
     title: str = "",
     fps: int = 30,
     output_dir: Path = Path("./"),
-):
+) -> Tuple[FuncAnimation, Path]:
+    """
+    Create an animation from a figure that is being continually updated.
+
+    Args:
+        fig (plt.Figure):
+            The figure being animated.
+
+        animator (Callable):
+            A function that produces the animation by updating the figure.
+
+        producer (Callable):
+            A functon that generates frames.
+
+        interval (int, optional):
+            The delay between each frame. Defaults to 1.
+
+        format (str, optional):
+            Animation file format (used for the writer). Defaults to "avi".
+
+        title (str, optional):
+            Title to be displayed on each frame (also serves as a file name). Defaults to "".
+
+        fps (int, optional):
+            Frames per second. Defaults to 30.
+
+        output_dir (Path, optional):
+            Directory where the animation is saved. Defaults to Path("./") (the current directory).
+
+    Returns:
+        Tuple[FuncAnimation, Path]:
+            A tuple containing:
+                1. The animation object.
+                2. The path to the saved animation.
+    """
+
     ts = pcf.timestamp()
     filename = Path(f"{title.lower().replace(' ','_')}-{ts}")
 

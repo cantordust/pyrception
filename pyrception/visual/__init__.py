@@ -1,6 +1,10 @@
 from pyrception.visual.util.types import *
+from pyrception.visual.rf import ReceptiveFields
 
 __all__ = [
-    "View",
-    "KernelType",
+    "KernelFilter",
+    "Dim",
+    "Dims",
+    "DType",
+    "LogLevel",
 ]

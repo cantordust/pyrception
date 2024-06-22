@@ -4,8 +4,7 @@ channels:
   - nvidia
   - conda-forge
 dependencies:
-  - python=3.10
-  - dotmap
+  - python=3.11
   - h5py
   - ipykernel
   - ipympl
@@ -15,11 +14,13 @@ dependencies:
   - opencv
   - pip
   - python-decouple
+  - pydata-sphinx-theme
   - pytorch
   - pytorch-cuda
   - scikit-image
   - scipy
   - seaborn
+  - sphinx
   - torchvision
   - tqdm
   - pip:

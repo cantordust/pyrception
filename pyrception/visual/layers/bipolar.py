@@ -5,13 +5,15 @@ import torch as pt
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.visual.util.types import View
-from pyrception.visual.util.types import KernelType
+from pyrception.conf import logger
+from pyrception.visual.util.types import KernelFilter
+from pyrception.visual.layers.base import BaseLayer
+from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.layers.horizontal import HorizontalLayer
-from pyrception.visual.layers.proto import ProtoLayer
+from pyrception.visual.rf import ReceptiveFields
+from pyrception.visual.util.types import RFArrangement
 
-
-class BipolarLayer(ProtoLayer):
+class BipolarLayer(BaseLayer):
     """
     A layer of bipolar cells.
     This layer processes the signal form the receptor layer
@@ -20,71 +22,98 @@ class BipolarLayer(ProtoLayer):
 
     def __init__(
         self,
-        alpha: Union[pt.Tensor, float, int],
+        size: Tuple[int, ...],
+        receptor: ReceptorLayer,
+        horizontal: HorizontalLayer,
+        sectors: int = 64,
+        name: str = "Bipolar",
+        rf_params: Dict[str, Any] = None,
+    ):
+
+        # Initialise the base
+        super().__init__(size, name)
+        self.receptor = receptor
+        self.horizontal = horizontal
+
+        # Initialise the receptive fields.
+        if rf_params is None:
+            rf_params = {}
+        rf_params.setdefault("name", f"{name} | Bipolar RFs")
+        self.rfs = ReceptiveFields(
+            self.size,
+            receptor.rfs.cell_coordinates,
+            sectors,
+            **rf_params,
+        )
+        self.rfs.make_rfs()
+
+        # Temporal exponential running mean
+        self.mean = pt.zeros((self.rfs.neuron_count,), device=conf.device)
+
+        # 'Forgetting rate' for the temporal mean
+        self.alpha = self._compute_forgetting_rate()
+
+        # Activations for the ON and OFF pathways
+        self.on = pt.zeros((self.rfs.neuron_count,))
+        self.off = pt.zeros_like(self.on)
+
+        self.info("Initialised.")
+
+    def _compute_forgetting_rate(self):
+        hr = self.rfs.cell_coordinates[:, 0] - self.rfs.height // 2
+        wr = self.rfs.cell_coordinates[:, 1] - self.rfs.width // 2
+
+        distances = pt.sqrt(hr**2 + wr**2)
+        alpha_min = 0.05
+        alpha_max = 0.95
+
+        alpha = 1 - 1 / (1 + distances / distances.max())
+
+        # Min-max scaling
+        alpha = alpha_min + (alpha - alpha.min()) * (alpha_max - alpha_min) / (
+            alpha.max() - alpha.min()
+        )
+
+        self.debug(f"Forgetting rate range: {alpha.min():>0.3f} - {alpha.max():>0.3f}")
+
+        return alpha
+
+    def forward(self) -> Tuple[pt.Tensor, ...]:
+        """
+        The bipolar layer splits the input into ON and OFF pathways.
+
+        Returns:
+            Tuple[pt.Tensor, ...]:
+                A tuple containing:
+                    1. The activation of ON bipolar cells.
+                    2. The activation of OFF bipolar cells.
+                    3. The scaled signal (raw input signal
+                        sans feedback from the horizontal cells).
+                    4. The raw (postsynaptic) activation of the bipolar cells.
+        """
+
+        # Subtract the raw photoreceptor signal
+        # from the horizontal feedback signal
+        scaled_signal = self.receptor.activation - self.horizontal.feedback
+
+        # Compute the nominal activation for each bipolar cell
+        activation = self.convolve(self.rfs.rfs, scaled_signal)
+
+        # Compute the on and off activations
+        diff = activation - self.mean
+        self.on = pt.log1p(pt.relu(diff))
+        self.off = pt.log1p(pt.relu(-diff))
+
+        # Update the running mean (low-pass filter)
+        self.mean += self.alpha * diff
+
+        return (self.on, self.off, scaled_signal, activation)
+
+    def plot_rfs(
+        self,
         *args,
         **kwargs,
     ):
 
-        kwargs.setdefault("name", "Bipolar")
-        super().__init__(*args, **kwargs)
-
-        # ON and OFF pathways
-        self.on = pt.zeros((self.neuron_count,))
-        self.off = pt.zeros_like(self.on)
-
-        if not isinstance(alpha, (pt.Tensor, float, int)):
-            raise TypeError(
-                f"The alpha parameter should be a numeric or tensor type (got {type(alpha)})."
-            )
-
-        if isinstance(alpha, (float, int)):
-
-            # Numeric
-            if not (0.0 < alpha < 1.0):
-                raise ValueError(
-                    f"The value of alpha should be between 0 and 1 (got {alpha})."
-                )
-            alpha = pt.full((self.neuron_count,), float(alpha), device=conf.device)
-
-        else:
-            # Tensor
-            if not (pt.equal(alpha.shape, self.on.shape)):
-                raise TypeError(
-                    f"The alpha tensor must have the same shape as the ON tensor ({self.on.shape}; got {self.alpha.shape})"
-                )
-
-            alpha = alpha.to(conf.device)
-
-        # Exponential running mean (temporal mean)
-        # ==================================================
-        self.on_mean = pt.zeros((self.neuron_count,), device=conf.device)
-        self.off_mean = pt.zeros((self.neuron_count,), device=conf.device)
-
-        # 'Forgetting rate' for the temporal mean
-        self.alpha = alpha
-
-        self.info("Initialised.")
-
-    def __call__(
-        self,
-        raw: pt.Tensor,
-        horizontal: pt.Tensor,
-    ) -> pt.Tensor:
-        """
-        Split the input into ON and OFF pathways.
-        """
-
-        # Subtract the raw photoreceptor signal
-        # from the running (temporal) mean
-        scaled = raw - horizontal
-
-        activation = self.convolve(scaled)
-
-        on = pt.relu(activation)
-        off = pt.relu(-activation)
-
-        # Update the running mean
-        self.on_mean += self.alpha * (on - self.on_mean)
-        self.off_mean += self.alpha * (off - self.off_mean)
-
-        return (on, off)
+        kwargs.setdefault("title", "Bipolar layer receptive fields")
+        return self._plot_rfs(self.rfs, *args, **kwargs)
