@@ -8,6 +8,12 @@ Currently, Pyrception is not released as a PyPI or Conda package. You can instal
 
 `$> conda env create -f environment.yml`
 
+To generate the Sphinx documentation:
+
+`$> cd docs && make html`
+
+To view the documentation, copy the path to the index file located under `build/html` (`build/html/index.html`) and paste it into the address bar of your browser.
+
 # ToDo
 
 ## Short-term

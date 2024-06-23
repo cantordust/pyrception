@@ -1,7 +1,7 @@
 Receptive fields
 ----------------
 
-.. automodule:: pyrception.visual.kernel
+.. automodule:: pyrception.visual.rf
    :members:
    :undoc-members:
    :show-inheritance:

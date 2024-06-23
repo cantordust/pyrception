@@ -277,8 +277,6 @@ class ReceptiveFields(Logging):
         # Extract the indices that fall within the ellipse.
         k_idx = pt.argwhere((xs / spread[0]) ** 2 + (ys / spread[1]) ** 2 < 1)[:, 0]
 
-        # print(f"==[ k_idx: {k_idx} | {k_idx.shape}")
-
         # Extract the coordinates of the kernel from the substrate as row / column pairs.
         coords = substrate[k_idx]
         (k_rows, k_cols) = (coords[:, 0], coords[:, 1])
@@ -819,8 +817,6 @@ class ReceptiveFields(Logging):
             total=len(distances),
             desc="Neurons created: ",
         ):
-            # print(f"==[ {rx, ry}")
-            # print(f"==[ cdist: {cdist}")
 
             # Do not proceed if the distance is greater
             # than the extent.
@@ -880,9 +876,6 @@ class ReceptiveFields(Logging):
                 # Store the size of the RF of the cell
                 rf_sizes.append(rf_size)
                 neuron_count += 1
-
-                # print(f"==[ rs: {rs.shape}")
-                # print(f"==[ {idx} ] indices: {len(indices[-1])}")
 
         # Prepare the indices and the values of
         # the sparse tensor

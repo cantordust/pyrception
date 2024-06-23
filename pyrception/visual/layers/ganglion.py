@@ -90,8 +90,6 @@ class GanglionLayer(BaseLayer):
         )
         on_off_spikes = pt.where(on_off >= 0, 1, 0)
 
-        print(f"==[ on_off: {on_off} ({on_off_spikes.sum().int()}/{len(on_off_spikes)})")
-
         # OFF centre / ON surround
         off_on = self.convolve(
             self.bipolar_rfs.rfs,
@@ -101,9 +99,6 @@ class GanglionLayer(BaseLayer):
             self.amacrine.on,
         )
         off_on_spikes = pt.where(off_on >= 0, 1, 0)
-        print(
-            f"==[ on_off: {off_on} ({off_on_spikes.sum().int()}/{len(off_on_spikes)})"
-        )
 
         return (on_off_spikes, off_on_spikes)
 
@@ -120,11 +115,11 @@ class GanglionLayer(BaseLayer):
 
         Args:
 
-            bipolar_rf_colour (int, optional):
-                The value to use for highlighting the plotted bipolar cells.
+            bipolar_rf_colour (str, optional):
+                The colour to use for highlighting the plotted bipolar cells.
 
-            amacrine_rf_colour (int, optional):
-                The value to use for highlighting the plotted amacrine cells.
+            amacrine_rf_colour (str, optional):
+                The colour to use for highlighting the plotted amacrine cells.
 
         Returns:
             Tuple[plt.Figure, plt.Axes, List]:
@@ -132,7 +127,8 @@ class GanglionLayer(BaseLayer):
                     1. A Figure object.
                     2. An Axes object.
                     3. A list of mappables (which can be used for animations).
-                    3. The canvas.
+                    4. The canvas.
+
         """
 
         kwargs.setdefault("title", "Ganglion layer receptive fields")

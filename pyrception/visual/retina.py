@@ -163,7 +163,6 @@ class Retina(Logging):
         """
 
         for file in sorted(self.src_path.iterdir()):
-            # print(f"==[ file.name: {file.name}")
             if file.is_file() and file.suffix in (".png", ".jpg", ".jpeg"):
                 yield iio.imread(file)
 

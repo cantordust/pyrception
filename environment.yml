@@ -24,4 +24,5 @@ dependencies:
   - torchvision
   - tqdm
   - pip:
+      - furo
       - -e .

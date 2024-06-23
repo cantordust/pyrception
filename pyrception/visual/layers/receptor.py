@@ -310,7 +310,7 @@ class ReceptorLayer(BaseLayer):
         if self.dims.original.depth == 1 or mode is None:
             return
 
-        # print(f"==[ Creating flatmask...")
+        self.debug(f"Creating flatmask...")
 
         probs = pt.zeros(self.size, dtype=conf.dtype)
 
