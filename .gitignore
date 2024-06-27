@@ -136,3 +136,5 @@ dmypy.jsonm
 **/output/**
 docs/*
 !docs/source/
+!docs/Makefile
+!docs/make.bat
