@@ -27,6 +27,7 @@ class BipolarLayer(BaseLayer):
         horizontal: HorizontalLayer,
         sectors: int = 64,
         name: str = "Bipolar",
+        forgetting_range: Tuple[float, float] = (0.05, 0.95),
         rf_params: Dict[str, Any] = None,
     ):
 
@@ -50,6 +51,8 @@ class BipolarLayer(BaseLayer):
         # Temporal exponential running mean
         self.mean = pt.zeros((self.rfs.neuron_count,), device=conf.device)
 
+        self.forgetting_range = forgetting_range
+
         # 'Forgetting rate' for the temporal mean
         self.alpha = self._compute_forgetting_rate()
 
@@ -64,8 +67,8 @@ class BipolarLayer(BaseLayer):
         wr = self.rfs.cell_coordinates[:, 1] - self.rfs.width // 2
 
         distances = pt.sqrt(hr**2 + wr**2)
-        alpha_min = 0.05
-        alpha_max = 0.95
+        alpha_min = self.forgetting_range[0]
+        alpha_max = self.forgetting_range[1]
 
         alpha = 1 - 1 / (1 + distances / distances.max())
 

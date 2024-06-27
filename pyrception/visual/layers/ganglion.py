@@ -31,8 +31,9 @@ class GanglionLayer(BaseLayer):
         size: Tuple[int, ...],
         bipolar: BipolarLayer,
         amacrine: AmacrineLayer,
-        sectors: int = 32,
+        sectors: int = 64,
         name: str = "Ganglion",
+        inhibition_scale: float = 1.25,
         bipolar_params: Dict[str, Any] = None,
         amacrine_params: Dict[str, Any] = None,
     ):
@@ -67,6 +68,7 @@ class GanglionLayer(BaseLayer):
             **amacrine_params,
         )
         self.amacrine_rfs.make_rfs()
+        self.inhibition_scale = inhibition_scale
 
         # ON/OFF and OFF/ON ganglion cells
         # self.on_off =
@@ -84,7 +86,7 @@ class GanglionLayer(BaseLayer):
         on_off = self.convolve(
             self.bipolar_rfs.rfs,
             self.bipolar.on,
-        ) - self.convolve(
+        ) - self.inhibition_scale * self.convolve(
             self.amacrine_rfs.rfs,
             self.amacrine.off,
         )
@@ -94,7 +96,7 @@ class GanglionLayer(BaseLayer):
         off_on = self.convolve(
             self.bipolar_rfs.rfs,
             self.bipolar.off,
-        ) - self.convolve(
+        ) - self.inhibition_scale * self.convolve(
             self.amacrine_rfs.rfs,
             self.amacrine.on,
         )

@@ -65,14 +65,15 @@ def timestamp(ms: bool = False) -> str:
 
 def plot(
     entries: List[List[PlotEntry]] = None,
-    height: int = 8,
-    width: int = 10,
+    figsize: Tuple[int, int] = (6, 4),
+    height: int = None,
+    width: int = None,
+    title: str = None,
     scale: int = 1,
-    figsize: Tuple[int] = None,
     fig: plt.Figure = None,
     axes: plt.Axes = None,
     animated: bool = False,
-    cmap: str = None,
+    cmap: str = "gray",
     dpi: int = 96,
 ) -> Tuple[plt.Figure, plt.Axes, List]:
     """
@@ -82,18 +83,21 @@ def plot(
         entries (List[List[Dict[str, Any]]], optional):
             Data items to plot. Defaults to None.
 
+        figsize (Tuple[int], optional):
+            Figure size. Defaults to None.
+            If this is not provided, the figure size is computed from the width and height.
+
         height (int, optional):
             Height of a single plot. Defaults to 8.
 
         width (int, optional):
             Width of a single plot. Defaults to 10.
 
+        title (str, optional):
+            Figure title. Defaults to None.
+
         scale (int, optional):
             Scale of the plot. Defaults to 1.
-
-        figsize (Tuple[int], optional):
-            Figure size. Defaults to None.
-            If this is not provided, the figure size is computed from the width and height.
 
         fig (plt.Figure, optional):
             Optional preexisting Figure instance. Defaults to None.
@@ -121,6 +125,9 @@ def plot(
     rows = 1
     cols = 1
 
+    if title is None:
+        title = ""
+
     if entries is None:
         entries = []
     else:
@@ -134,6 +141,10 @@ def plot(
         cols = max([len(row) for row in entries])
 
     if figsize is None:
+        if height is None or width is None:
+            raise ValueError(
+                f"Please specify either the figsize (in inches) or both the height and the width (in pixels)"
+            )
         figsize = (scale * cols * height / dpi, scale * rows * width / dpi)
 
     fp = FontProperties()
@@ -152,7 +163,11 @@ def plot(
                     # Expand shortcut entries.
                     # Assume a scatter plot if the array is 1D,
                     # otherwise assume an image.
-                    entry = ScatterPlot(entry) if len(entry.shape) == 1 else ImagePlot(entry)
+                    entry = (
+                        ScatterPlot(entry)
+                        if len(entry.shape) == 1
+                        else ImagePlot(entry)
+                    )
 
                 if entry.plottype is None:
                     raise ValueError(f"Invalid plot type for entry {entry}.")
@@ -167,6 +182,7 @@ def plot(
 
                 if entry.axis:
                     ax.axis("on")
+                    entry.spines = True
                 else:
                     ax.xaxis.set_ticks([])
                     ax.yaxis.set_ticks([])
@@ -182,6 +198,11 @@ def plot(
                         vmax=entry.clim[1],
                     )
 
+                    if entry.colourbar:
+                        divider = make_axes_locatable(ax)
+                        cax = divider.append_axes("right", size="5%", pad=0.05)
+                        fig.colorbar(mappable, ax=ax, cax=cax)
+
                 elif isinstance(entry, ScatterPlot):
                     (mappable,) = ax.plot(
                         pt.arange(len(entry.data)),
@@ -193,18 +214,16 @@ def plot(
                         animated=animated,
                     )
 
-                if entry.colourbar:
-                    divider = make_axes_locatable(ax)
-                    cax = divider.append_axes("right", size="5%", pad=0.05)
-                    fig.colorbar(mappable, ax=ax, cax=cax)
-
                 ax.set_xlabel(entry.xlabel)
                 ax.set_ylabel(entry.ylabel)
                 ax.set_title(entry.title)
                 mappables.append(mappable)
 
+        fig.suptitle(title)
+
         if fig is not None:
             fig.tight_layout()
+
 
         return (fig, axes, mappables)
 
@@ -276,6 +295,8 @@ def animate(
             writer = PillowWriter(fps=fps, metadata=dict(artist=title))
         elif format == "avi":
             writer = FFMpegWriter(fps=fps, codec="ffv1")
+        elif format == "mp4":
+            writer = FFMpegWriter(fps=fps, codec="h264")
 
         ani.save(filename, writer=writer)
     except Exception as e:

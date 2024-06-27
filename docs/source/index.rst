@@ -10,9 +10,10 @@ The Pyrception package aims to be a one-stop solution for modelling different pe
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Contents
 
-   Modules <modules.rst>
+   Modules <pyrception/modules.rst>
+   Examples <notebooks/examples.rst>
 
 Indices and tables
 ==================
