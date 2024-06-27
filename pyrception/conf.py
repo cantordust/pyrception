@@ -49,7 +49,7 @@ logger.info("Logger configured.")
 # PyTorch configuration
 # ==================================================
 #: Default dtype.
-dtype = config("PYRCEPTION_PYTORCH_DEFAULT_DTYPE", default="float16")
+dtype = config("PYRCEPTION_PYTORCH_DEFAULT_DTYPE", default="f32")
 pt.set_default_dtype(DType.get(dtype))
 dtype = pt.get_default_dtype()
 logger.info(f"Default PyTorch tensor type: '{dtype}'.")

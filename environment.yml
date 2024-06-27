@@ -1,7 +1,6 @@
 name: pyrception
 channels:
   - pytorch
-  - nvidia
   - conda-forge
 dependencies:
   - python=3.11
@@ -15,14 +14,10 @@ dependencies:
   - opencv
   - pip
   - python-decouple
-  - pydata-sphinx-theme
   - pytorch
-  - pytorch-cuda
   - scikit-image
   - scipy
-  - seaborn
   - sphinx
-  - torchvision
   - tqdm
   - pip:
       - furo
