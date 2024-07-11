@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import torch as pt
@@ -24,7 +24,7 @@ class BaseLayer(Logging):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         name: str = "Base layer",
     ):
         super().__init__(name)
@@ -46,13 +46,13 @@ class BaseLayer(Logging):
 
     def _flatten(
         self,
-        container: Any,
+        container: tp.Any,
     ) -> np.ndarray:
         """
         Flatten a potentially nested (heterogeneous) array of elements.
 
         Args:
-            container (Any):
+            container (tp.Any):
                 A container or a numeric value.
 
         Returns:
@@ -63,7 +63,7 @@ class BaseLayer(Logging):
         if isinstance(container, (int, float)):
             array.append(container)
 
-        elif isinstance(container, Iterable):
+        elif isinstance(container, tp.Iterable):
             for element in container:
                 if isinstance(element, pt.Tensor):
                     element = element.tolist()
@@ -73,13 +73,13 @@ class BaseLayer(Logging):
 
     def _to_rgba(
         self,
-        colour: Union[str, Iterable],
+        colour: tp.Union[str, tp.Iterable],
     ) -> np.ndarray:
         """
         Convert a colour specified as
 
         Args:
-            colour (Union[str, Iterable]):
+            colour (tp.Union[str, tp.Iterable]):
                 The colour specified as a HEX string or an iterable.
 
         Returns:
@@ -100,16 +100,16 @@ class BaseLayer(Logging):
     def _plot_rfs(
         self,
         rfs: ReceptiveFields,
-        cells: Union[List[int], Tuple[int]] = None,
-        cell_colour: Tuple[str, Tuple[int, ...]] = "#00ffffff",
-        rf_colour: Tuple[str, Tuple[int, ...]] = "#ff00ff33",
+        cells: tp.Union[tp.List[int], tp.Tuple[int]] = None,
+        cell_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#00ffffff",
+        rf_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#ff00ff33",
         title: str = "Receptive fields",
-        figsize: Tuple = (8, 6),
+        figsize: tp.Tuple = (8, 6),
         canvas: np.ndarray = None,
         fig: plt.Figure = None,
         axes: plt.Axes = None,
         spines: bool = False,
-    ) -> Tuple[plt.Figure, plt.Axes, List, np.ndarray]:
+    ) -> tp.Tuple[plt.Figure, plt.Axes, tp.List, np.ndarray]:
         """
         Plot the receptive fields of amacrine cells.
         This takes into account the sparsity of bipolar cells.
@@ -119,30 +119,30 @@ class BaseLayer(Logging):
             rfs: (ReceptiveFields):
                 Receptive fields to plot.
 
-            cells (Union[List[int], Tuple[int]], optional):
+            cells (tp.Union[tp.List[int], tp.Tuple[int]], optional):
                 Coordinates of the cells to plot. Defaults to None.
 
-            cell_colour (Tuple[str, Tuple[int, ...]], optional):
+            cell_colour (tp.Tuple[str, tp.Tuple[int, ...]], optional):
                 The colour to use for highlighting the plotted cells.
                 Defaults to
 
-            rf_colour (Tuple[str, Tuple[int, ...]], optional):
+            rf_colour (tp.Tuple[str, tp.Tuple[int, ...]], optional):
                 The colour to use for highlighting the plotted receptive field.
 
             title (str, optional):
                 Plot title. Defaults to "Amacrine cell receptive fields".
 
-            figsize (Tuple, optional):
+            figsize (tp.Tuple, optional):
                 Figure size. Defaults to (8, 6).
 
             fig (plt.Figure, optional):
-                Optional preexisting Figure instance. Defaults to None.
+                tp.Optional preexisting Figure instance. Defaults to None.
 
             axes (plt.Axes, optional):
-                Optional preexisting Axes instance. Defaults to None.
+                tp.Optional preexisting Axes instance. Defaults to None.
 
         Returns:
-            Tuple[plt.Figure, plt.Axes, List]:
+            tp.Tuple[plt.Figure, plt.Axes, tp.List]:
                 A tuple containing:
                     1. A Figure object.
                     2. An Axes object.
@@ -175,16 +175,7 @@ class BaseLayer(Logging):
         # ==================================================
         if rf_colour is not None:
             for c in cells:
-                canvas[rfs.rows[c], rfs.cols[c]] += rf_colour
-
-                # # Scale by the minimal RF factor
-                # if rfs.rf_factors is not None:
-                #     canvas[rfs.cols[c], rfs.rows[c]] *= rfs.rf_factors.numpy().min()
-                # else:
-                #     canvas[rfs.cols[c], rfs.rows[c]] /= canvas.max()
-
-            # Make the RF fully opaque
-        # canvas[:, :, 3] = rf_colour[-1]
+                canvas[rfs.rf_rows[c], rfs.rf_cols[c]] += rf_colour
 
         # Plot the cells last so that they are superimposed
         # on top of the receptive fields.
@@ -236,4 +227,4 @@ class BaseLayer(Logging):
         # Explore alternatives for matrix operations
         # (SciPy, CuPy, Trilinos...)
         # ==================================================
-        return pt.mv(rfs, vector)
+        return pt.sparse.mm(rfs, vector)

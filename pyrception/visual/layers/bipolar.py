@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import torch as pt
@@ -22,13 +22,13 @@ class BipolarLayer(BaseLayer):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         receptor: ReceptorLayer,
         horizontal: HorizontalLayer,
         sectors: int = 64,
         name: str = "Bipolar",
-        forgetting_range: Tuple[float, float] = (0.05, 0.95),
-        rf_params: Dict[str, Any] = None,
+        forgetting_range: tp.Tuple[float, float] = (0.05, 0.95),
+        rf_params: tp.Dict[str, tp.Any] = None,
     ):
 
         # Initialise the base
@@ -81,12 +81,12 @@ class BipolarLayer(BaseLayer):
 
         return alpha
 
-    def forward(self) -> Tuple[pt.Tensor, ...]:
+    def forward(self) -> tp.Tuple[pt.Tensor, ...]:
         """
         The bipolar layer splits the input into ON and OFF pathways.
 
         Returns:
-            Tuple[pt.Tensor, ...]:
+            tp.Tuple[pt.Tensor, ...]:
                 A tuple containing:
                     1. The activation of ON bipolar cells.
                     2. The activation of OFF bipolar cells.

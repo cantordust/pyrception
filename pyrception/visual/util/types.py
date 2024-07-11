@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 from loguru import logger
@@ -6,6 +6,9 @@ from loguru import logger
 # --------------------------------------
 from dataclasses import dataclass
 from dataclasses import field
+
+# --------------------------------------
+from matplotlib import colors
 
 # --------------------------------------
 import numpy as np
@@ -34,7 +37,7 @@ class KernelFilter(enum.Enum):
     Receptive field organisation.
     """
 
-    Flat = enum.auto()
+    Uniform = enum.auto()
     Gaussian = enum.auto()
     Gabor = enum.auto()
 
@@ -94,12 +97,12 @@ class LogLevel(enum.Enum):
     Critical = "<red>"
 
     @staticmethod
-    def contains(level: str) -> Optional[str]:
+    def contains(level: str) -> tp.Optional[str]:
         """
         Check if a log level is valid.
 
         Returns:
-            Optional[str]:
+            tp.Optional[str]:
                 The level (as an uppercase string)
                 or None if the level is invalid.
         """
@@ -134,7 +137,7 @@ class KernelParams:
 
         filter (KernelFilter, optional):
             The filter response type for receptive fields in this layer.
-            Defaults to KernelFilter.Flat.
+            Defaults to KernelFilter.Uniform.
 
         scale (float), optional):
             A scaling factor for kernels.
@@ -151,13 +154,13 @@ class KernelParams:
             Aspect ratio of the kernel.
             Defaults to (1.0, 1.0).
 
-        params (Dict[str, Any], optional):
+        params (tp.Dict[str, tp.Any], optional):
             Additional kernel parameters.
             Defaults to {}.
     """
 
     shape: KernelShape = KernelShape.Elliptic
-    filter: KernelFilter = KernelFilter.Flat
+    filter: KernelFilter = KernelFilter.Uniform
     scale: float = 1.0
     min_size: pt.Tensor = field(
         default_factory=lambda: pt.tensor([1, 1], dtype=pt.int32)
@@ -165,7 +168,7 @@ class KernelParams:
     aspect: pt.Tensor = field(
         default_factory=lambda: pt.tensor([1.0, 1.0], dtype=pt.float32)
     )
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: tp.Dict[str, tp.Any] = field(default_factory=dict)
 
     def __post_init__(self):
 
@@ -192,7 +195,7 @@ class PlotEntry:
     axis: bool = False
     spines: bool = False
     colourbar: bool = False
-    clim: Tuple[float, float] = (None, None)
+    clim: tp.Tuple[float, float] = (None, None)
     xlabel: str = ""
     ylabel: str = ""
     title: str = ""
@@ -204,6 +207,8 @@ class ImagePlot(PlotEntry):
     '''
 
     plottype: str = "image"
+    cmap: str = "grey"
+    norm: colors.Normalize = colors.Normalize()
 
 @dataclass
 class ScatterPlot(PlotEntry):

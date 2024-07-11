@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import torch as pt
@@ -35,9 +35,9 @@ class ReceptorLayer(BaseLayer):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         saccades: bool = False,
-        mode: Optional[int] = cv.COLOR_RGB2GRAY,
+        mode: tp.Optional[int] = cv.COLOR_RGB2GRAY,
         name: str = "Receptor",
     ):
 
@@ -100,7 +100,7 @@ class ReceptorLayer(BaseLayer):
     def _pad(
         self,
         frame: pt.Tensor,
-        padding: Tuple[int, int, int, int],
+        padding: tp.Tuple[int, int, int, int],
     ) -> pt.Tensor:
         """
         Pad the frame so that we can shift the FOV
@@ -111,7 +111,7 @@ class ReceptorLayer(BaseLayer):
             frame (pt.Tensor):
                 Frame to be padded.
 
-            padding (Tuple[int, int, int, int]):
+            padding (tp.Tuple[int, int, int, int]):
                 Padding extents in PyTorch order (left, right, top, bottom).
 
         Returns:
@@ -126,7 +126,7 @@ class ReceptorLayer(BaseLayer):
     def _unpad(
         self,
         tensor: pt.Tensor,
-        padding: Tuple[int, int, int, int],
+        padding: tp.Tuple[int, int, int, int],
     ) -> pt.Tensor:
         """
         Unpad a frame padded with _pad().
@@ -135,7 +135,7 @@ class ReceptorLayer(BaseLayer):
             tensor (pt.Tensor):
                 Padded tensor.
 
-            padding (Tuple[int, int, int, int]):
+            padding (tp.Tuple[int, int, int, int]):
                 Amount of padding in PyTorch order (left, right, top, bottom).
 
         Returns:
@@ -171,8 +171,8 @@ class ReceptorLayer(BaseLayer):
     def _scale(
         self,
         tensor: pt.Tensor,
-        min: Optional[float] = 0.0,
-        max: Optional[float] = 255.0,
+        min: tp.Optional[float] = 0.0,
+        max: tp.Optional[float] = 255.0,
     ) -> pt.Tensor:
         """
         Min-max normalised version of the frame.
@@ -181,10 +181,10 @@ class ReceptorLayer(BaseLayer):
             tensor (pt.Tensor):
                 The tensor to be normalised.
 
-            min (Optional[float], optional):
+            min (tp.Optional[float], optional):
                 Minimal value. Defaults to 0.0.
 
-            max (Optional[float], optional):
+            max (tp.Optional[float], optional):
                 Maximal value. Defaults to 255.0.
 
         Returns:
@@ -252,7 +252,7 @@ class ReceptorLayer(BaseLayer):
         self,
         height_offset: float = 0.0,
         width_offset: float = 0.0,
-    ) -> Tuple[int, ...]:
+    ) -> tp.Tuple[int, ...]:
         """
         Compute the horizontal and vertical offsets
         from the width and height offset values and
@@ -266,7 +266,7 @@ class ReceptorLayer(BaseLayer):
                 Offset to move in the width direction. Defaults to 0.0.
 
         Returns:
-            Tuple[int, ...]:
+            tp.Tuple[int, ...]:
                 A tuple containing the padding in PyTorch order (left, right, top, bottom).
         """
 
@@ -290,7 +290,7 @@ class ReceptorLayer(BaseLayer):
 
     def _make_flatmask(
         self,
-        mode: Optional[int] = None,
+        mode: tp.Optional[int] = None,
     ) -> pt.Tensor:
         """
         Create a mask that can be used to obtain a flattened
@@ -299,7 +299,7 @@ class ReceptorLayer(BaseLayer):
         WIP: Needs to be tested.
 
         Args:
-            mode (Optional[int], optional):
+            mode (tp.Optional[int], optional):
                 Masking mode. Defaults to None.
 
         Returns:
@@ -329,7 +329,7 @@ class ReceptorLayer(BaseLayer):
     def forward(
         self,
         frame: pt.Tensor,
-        offset: Optional[Tuple[float, float]] = None,
+        offset: tp.Optional[tp.Tuple[float, float]] = None,
     ) -> pt.Tensor:
         """
         Read the input and apply a certain offset if saccades are enabled.
@@ -338,7 +338,7 @@ class ReceptorLayer(BaseLayer):
             frame (pt.Tensor):
                 The raw input.
 
-            offset (Optional[Tuple[float, float]], optional):
+            offset (tp.Optional[tp.Tuple[float, float]], optional):
                 Padding for saccades. Defaults to None.
 
         Returns:

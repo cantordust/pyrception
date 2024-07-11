@@ -4,6 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.11
+  - bokeh
   - h5py
   - ipykernel
   - ipympl
@@ -20,5 +21,6 @@ dependencies:
   - sphinx
   - tqdm
   - pip:
+      - manim
       - furo
       - -e .

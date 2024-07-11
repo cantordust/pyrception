@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import torch as pt
@@ -17,11 +17,11 @@ class HorizontalLayer(BaseLayer):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         receptor: ReceptorLayer,
         sectors: int = 32,
         name: str = "Horizontal",
-        rf_params: Dict[str, Any] = None,
+        rf_params: tp.Dict[str, tp.Any] = None,
     ):
 
         # Initialise the base
@@ -54,7 +54,7 @@ class HorizontalLayer(BaseLayer):
         # Indices
         self.feedback_indices = [
             cols + self.rfs.width * rows
-            for rows, cols in zip(self.rfs.rows, self.rfs.cols)
+            for rows, cols in zip(self.rfs.rf_rows, self.rfs.rf_cols)
         ]
 
         self.info("Initialised.")

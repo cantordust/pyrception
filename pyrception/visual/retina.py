@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 from pathlib import Path
@@ -34,8 +34,8 @@ class Retina(Logging):
 
     def __init__(
         self,
-        source: Union[str, int],
-        size: Tuple[int, ...],
+        source: tp.Union[str, int],
+        size: tp.Tuple[int, ...],
         name: str = "Retina",
         *args,
         **kwargs,
@@ -44,10 +44,10 @@ class Retina(Logging):
         Retina initialisation.
 
         Args:
-            source (Union[str, int]):
+            source (tp.Union[str, int]):
                 Input source.
 
-            size (Tuple[int, ...]):
+            size (tp.Tuple[int, ...]):
                 Size of the visual field.
 
             saccades (bool, optional):
@@ -166,12 +166,12 @@ class Retina(Logging):
             if file.is_file() and file.suffix in (".png", ".jpg", ".jpeg"):
                 yield iio.imread(file)
 
-    def _read_frame_file(self) -> Tuple[bool, np.ndarray]:
+    def _read_frame_file(self) -> tp.Tuple[bool, np.ndarray]:
         """
         Read a frame from a video file.
 
         Returns:
-            Tuple[bool, np.ndarray]:
+            tp.Tuple[bool, np.ndarray]:
                 A tuple containing:
                     1. The processing indicator (if the file is still being read from)
                     2. The frame as a NumPy array
@@ -188,13 +188,13 @@ class Retina(Logging):
 
     def _get_frame(
         self,
-        probe: Optional[bool] = False,
+        probe: tp.Optional[bool] = False,
     ):
         """
         _summary_
 
         Args:
-            probe (Optional[bool], optional): _description_. Defaults to False.
+            probe (tp.Optional[bool], optional): _description_. Defaults to False.
 
         Returns:
             _type_: _description_

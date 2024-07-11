@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 from datetime import datetime
@@ -40,7 +40,7 @@ from pyrception.visual.util.types import ImagePlot
 from pyrception.visual.util.types import ScatterPlot
 
 
-def cwd(path: Union[Path, str]):
+def cwd(path: tp.Union[Path, str]):
     path = Path(path).resolve().absolute()
     if not path.exists():
         return None
@@ -64,8 +64,8 @@ def timestamp(ms: bool = False) -> str:
 
 
 def plot(
-    entries: List[List[PlotEntry]] = None,
-    figsize: Tuple[int, int] = (6, 4),
+    entries: tp.List[tp.List[PlotEntry]] = None,
+    figsize: tp.Tuple[int, int] = (12, 8),
     height: int = None,
     width: int = None,
     title: str = None,
@@ -73,17 +73,16 @@ def plot(
     fig: plt.Figure = None,
     axes: plt.Axes = None,
     animated: bool = False,
-    cmap: str = "gray",
     dpi: int = 96,
-) -> Tuple[plt.Figure, plt.Axes, List]:
+) -> tp.Tuple[plt.Figure, plt.Axes, tp.List]:
     """
     Plot images in a row, column or grid pattern.
 
     Args:
-        entries (List[List[Dict[str, Any]]], optional):
+        entries (tp.List[tp.List[tp.Dict[str, tp.Any]]], optional):
             Data items to plot. Defaults to None.
 
-        figsize (Tuple[int], optional):
+        figsize (tp.Tuple[int], optional):
             Figure size. Defaults to None.
             If this is not provided, the figure size is computed from the width and height.
 
@@ -100,23 +99,20 @@ def plot(
             Scale of the plot. Defaults to 1.
 
         fig (plt.Figure, optional):
-            Optional preexisting Figure instance. Defaults to None.
+            tp.Optional preexisting Figure instance. Defaults to None.
 
         axes (plt.Axes, optional):
-            Optional preexisting Axes instance. Defaults to None.
+            tp.Optional preexisting Axes instance. Defaults to None.
 
         animated (bool, optional):
             Toggle indicating if the plot would be used for animation. Defaults to False.
-
-        cmap (str, optional):
-            The colour map to use for plots. Defaults to None.
 
         dpi (int, optional):
             DPI setting. Defaults to 96.
             Used for computing the figure size from the width and the height.
 
     Returns:
-        Tuple[plt.Figure, plt.Axes, List]:
+        tp.Tuple[plt.Figure, plt.Axes, tp.List]:
             A tuple containing:
                 1. A Figure object.
                 2. An Axes object.
@@ -128,13 +124,13 @@ def plot(
     if title is None:
         title = ""
 
-    if entries is None:
-        entries = []
+    if entries is None or (isinstance(entries, tp.List) and len(entries) == 0):
+        raise ValueError(f"Please provide at least one entry to plot")
     else:
-        if isinstance(entries, (PlotEntry, np.ndarray, pt.Tensor)):
+        if isinstance(entries, (ImagePlot, ScatterPlot, np.ndarray, pt.Tensor)):
             entries = [[entries]]
 
-        elif isinstance(entries[0], (PlotEntry, np.ndarray, pt.Tensor)):
+        elif isinstance(entries[0], (ImagePlot, ScatterPlot, np.ndarray, pt.Tensor)):
             entries = [entries]
 
         rows = len(entries)
@@ -177,8 +173,8 @@ def plot(
                 else:
                     ax = axes[ridx] if cols == 1 else axes[ridx, cidx]
 
-                if isinstance(cmap, str):
-                    cmap = cm[cmap]
+                if hasattr(entry, "cmap") and isinstance(entry.cmap, str):
+                    entry.cmap = cm[entry.cmap]
 
                 if entry.axis:
                     ax.axis("on")
@@ -190,12 +186,20 @@ def plot(
                 ax.spines[:].set_visible(entry.spines)
 
                 if isinstance(entry, ImagePlot):
+                    kwargs = {}
+                    if entry.norm is None:
+                        kwargs.update(
+                            vmin=entry.data.min(),
+                            vmax=entry.data.max(),
+                        )
+                    else:
+                        kwargs.update(norm=entry.norm)
+
                     mappable = ax.imshow(
                         entry.data,
-                        cmap=cmap,
+                        cmap=entry.cmap,
                         animated=animated,
-                        vmin=entry.clim[0],
-                        vmax=entry.clim[1],
+                        **kwargs,
                     )
 
                     if entry.colourbar:
@@ -224,20 +228,19 @@ def plot(
         if fig is not None:
             fig.tight_layout()
 
-
         return (fig, axes, mappables)
 
 
 def animate(
     fig: plt.Figure,
-    animator: Callable,
-    producer: Callable,
+    animator: tp.Callable,
+    producer: tp.Callable,
     interval: int = 1,
     format: str = "avi",
     title: str = "",
     fps: int = 30,
     output_dir: Path = Path("./"),
-) -> Tuple[FuncAnimation, Path]:
+) -> tp.Tuple[FuncAnimation, Path]:
     """
     Create an animation from a figure that is being continually updated.
 
@@ -245,10 +248,10 @@ def animate(
         fig (plt.Figure):
             The figure being animated.
 
-        animator (Callable):
+        animator (tp.Callable):
             A function that produces the animation by updating the figure.
 
-        producer (Callable):
+        producer (tp.Callable):
             A functon that generates frames.
 
         interval (int, optional):
@@ -267,7 +270,7 @@ def animate(
             Directory where the animation is saved. Defaults to Path("./") (the current directory).
 
     Returns:
-        Tuple[FuncAnimation, Path]:
+        tp.Tuple[FuncAnimation, Path]:
             A tuple containing:
                 1. The animation object.
                 2. The path to the saved animation.
@@ -283,7 +286,7 @@ def animate(
             animator,
             producer,
             interval=interval,
-            blit=True,
+            blit=False,
             cache_frame_data=False,
         )
         output_dir = Path(output_dir)
@@ -296,7 +299,7 @@ def animate(
         elif format == "avi":
             writer = FFMpegWriter(fps=fps, codec="ffv1")
         elif format == "mp4":
-            writer = FFMpegWriter(fps=fps, codec="h264")
+            writer = FFMpegWriter(fps=fps, codec="libx264")
 
         ani.save(filename, writer=writer)
     except Exception as e:

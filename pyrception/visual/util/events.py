@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import cv2 as cv
@@ -34,19 +34,19 @@ class EventLoader:
     """
 
     @property
-    def shape(self) -> Tuple[int]:
+    def shape(self) -> tp.Tuple[int]:
         """
         The shape of the (NumPy) data contained in the HDF5 file.
 
         Returns:
-            Tuple[int]:
+            tp.Tuple[int]:
                 The shape of the data as a tuple of integers.
         """
         return self._data.shape if self._data is not None else None
 
     @staticmethod
     def to_path(
-        path: Union[str, Path],
+        path: tp.Union[str, Path],
         create: bool = False,
     ):
         path = Path(path).absolute()
@@ -64,8 +64,8 @@ class EventLoader:
 
     @staticmethod
     def to_dir(
-        root: Union[str, Path],
-        subdir: Union[str, Path] = None,
+        root: tp.Union[str, Path],
+        subdir: tp.Union[str, Path] = None,
         clean: bool = False,
     ):
         if subdir is None:
@@ -85,7 +85,7 @@ class EventLoader:
         return subdir
 
     @staticmethod
-    def load_h5(path: Union[str, Path]):
+    def load_h5(path: tp.Union[str, Path]):
         path = EventLoader.to_path(path)
 
         f = h5py.File(path, "r")
@@ -97,7 +97,7 @@ class EventLoader:
 
     @staticmethod
     def load_raw(
-        path: Union[str, Path],
+        path: tp.Union[str, Path],
         save: bool = True,
     ):
         path = EventLoader.to_path(path)
@@ -116,16 +116,16 @@ class EventLoader:
         self,
         events: np.ndarray,
         triggers: np.ndarray = None,
-        root: Union[str, Path] = None,
+        root: tp.Union[str, Path] = None,
     ):
         """
         H5 converter.
 
         Args:
-            path (Union[str, Path]):
+            path (tp.Union[str, Path]):
                 Path to the HDF5 file.
 
-            keys (Optional[Union[str, List[str]]], optional):
+            keys (tp.Optional[tp.Union[str, tp.List[str]]], optional):
                 A key or a list of keys specifying the data.
                 Defaults to None.
 

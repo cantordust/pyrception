@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import numpy as np
@@ -28,7 +28,7 @@ class ReceptiveFields(Logging):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         substrate: pt.Tensor = None,
         sectors: int = 32,
         extent: int = 1.0,
@@ -38,12 +38,12 @@ class ReceptiveFields(Logging):
         dense: bool = False,
         compute_factors: bool = False,
         name: str = "Receptive fields",
-        kernel_params: Dict[str, Any] = None,
+        kernel_params: tp.Dict[str, tp.Any] = None,
     ):
         """
 
         Args:
-            size (Tuple[int, ...]):
+            size (tp.Tuple[int, ...]):
                 The dimensions of the visual field (height, width, depth).
                 NOTE: Colour vision is not implemented yet.
                 It would be necessary to take into account the depth dimension.
@@ -87,7 +87,7 @@ class ReceptiveFields(Logging):
                 Layer name. Defaults to "Receptive fields".
                 Each derived class overrides the name with a default value.
 
-            kernel_params (Dict[str, Any], optional):
+            kernel_params (tp.Dict[str, tp.Any], optional):
                 Parameters to pass to the kernel function. Defaults to None.
                 This can be used to fine-tune the receptive fields.
                 (cf. :class:`pyrception.visual.util.types.KernelParams` for details).
@@ -116,18 +116,20 @@ class ReceptiveFields(Logging):
         # ==================================================
         self.neuron_count = 0
         self.substrate = self._make_substrate() if substrate is None else substrate
-        self.cell_coordinates = None
-        self.rows = None
-        self.cols = None
-        self.vals = None
         self.rfs = None
+        self.rf_rows = None
+        self.rf_cols = None
+        self.rf_vals = None
         self.rf_factors = None
         self.rf_sizes = None
-        self.rings = None
-        self.sectors = None
+        self.cell_coordinates = None
+        self.cell_rings = None
+        self.cell_sectors = None
+        self.cell_rows = None
+        self.cell_cols = None
 
     @property
-    def _f_rf_arrangement(self) -> Callable:
+    def _f_rf_arrangement(self) -> tp.Callable:
         """
         Return the RF factory function based on the RF arrangement.
 
@@ -136,7 +138,7 @@ class ReceptiveFields(Logging):
                 Raised if the requested RF arrangement is invalid.
 
         Returns:
-            Callable:
+            tp.Callable:
                 The RF factory function for the requested RF arrangement.
         """
 
@@ -153,7 +155,7 @@ class ReceptiveFields(Logging):
         return function
 
     @property
-    def _f_kernel_shape(self) -> Callable:
+    def _f_kernel_shape(self) -> tp.Callable:
         """
         Return the kernel factory function based on the kernel shape.
 
@@ -162,7 +164,7 @@ class ReceptiveFields(Logging):
                 Raised if the requested kernel shape is invalid.
 
         Returns:
-            Callable:
+            tp.Callable:
                 The kernel factory function for the requested kernel shape.
         """
 
@@ -179,7 +181,7 @@ class ReceptiveFields(Logging):
         return function
 
     @property
-    def _f_kernel_filter(self) -> Callable:
+    def _f_kernel_filter(self) -> tp.Callable:
         """
         Return the kernel factory function based on the kernel filter.
 
@@ -188,12 +190,12 @@ class ReceptiveFields(Logging):
                 Raised if the requested kernel filter is invalid.
 
         Returns:
-            Callable:
+            tp.Callable:
                 The kernel factory function for the requested kernel filter.
         """
 
         functions = {
-            KernelFilter.Flat: self._make_flat_kernel,
+            KernelFilter.Uniform: self._make_uniform_kernel,
             KernelFilter.Gaussian: self._make_gaussian_kernel,
             KernelFilter.Gabor: self._make_gabor_kernel,
         }
@@ -230,7 +232,7 @@ class ReceptiveFields(Logging):
         centre: pt.Tensor,
         spread: pt.Tensor,
         angle: float = 0.0,
-    ) -> Tuple[pt.Tensor, ...]:
+    ) -> tp.Tuple[pt.Tensor, ...]:
         """
         Create an elliptic kernel centred at a certain pixel and
         having the specified spread (semi-major axes).
@@ -252,7 +254,7 @@ class ReceptiveFields(Logging):
                 Rotation angle. Defaults to 0.0.
 
         Returns:
-            Tuple[pt.Tensor, ...]:
+            tp.Tuple[pt.Tensor, ...]:
                 A tuple containing:
                     1. Coordinate columns.
                     2. Coordinate rows.
@@ -261,7 +263,7 @@ class ReceptiveFields(Logging):
                     5. Pixel coordinates along the height dimension.
 
                 NOTE: The last two are used for computing the kernel weights
-                (for Gaussian and flat kernels).
+                (for Gaussian and uniform kernels).
         """
 
         # Columns and rows offset to the given centre coordinates.
@@ -288,9 +290,8 @@ class ReceptiveFields(Logging):
         substrate: pt.Tensor,
         centre: np.ndarray,
         spread: np.ndarray,
-        scale: float = 1.0,
         angle: float = 0.0,
-    ) -> Tuple[pt.Tensor, ...]:
+    ) -> tp.Tuple[pt.Tensor, ...]:
         """
         Create a rectangular kernel centred at a certain pixel and
         having the specified spread (side lengths).
@@ -310,14 +311,11 @@ class ReceptiveFields(Logging):
                 This is an array of two numbers representing the lenghts of
                 the two sides along the x and y dimensions.
 
-            scale (float, optional):
-                Scale of the kernel relative to the default. Defaults to 1.0.
-
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
         Returns:
-            Tuple[pt.Tensor, ...]:
+            tp.Tuple[pt.Tensor, ...]:
                 A tuple containing:
                     1. Coordinate columns.
                     2. Coordinate rows.
@@ -326,36 +324,58 @@ class ReceptiveFields(Logging):
                     5. Pixel coordinates along the height dimension.
 
                 NOTE: The last two are used for computing the kernel weights
-                (for Gaussian and flat kernels).
+                (for Gaussian and uniform kernels).
         """
-        pass
+        # Columns and rows offset to the given centre coordinates.
+        rows = substrate[:, 0] - centre[0]
+        cols = substrate[:, 1] - centre[1]
 
-    def _make_flat_kernel(
+        # Apply the rotation matrix.
+        sin = np.sin(angle)
+        cos = np.cos(angle)
+        xs = -cols * sin + rows * cos
+        ys = cols * cos + rows * sin
+
+        # Extract the indices that fall within the square.
+        k_idx = pt.argwhere(
+            (xs > -spread[0] / 2)
+            & (xs < spread[0] / 2)
+            & (ys > -spread[1] / 2)
+            & (ys < spread[1] / 2)
+        )[:, 0]
+
+        # Extract the coordinates of the kernel from the substrate as row / column pairs.
+        coords = substrate[k_idx]
+        (k_rows, k_cols) = (coords[:, 0], coords[:, 1])
+
+        return (k_rows, k_cols, k_idx, xs[k_idx], ys[k_idx])
+
+    def _make_uniform_kernel(
         self,
         substrate: pt.Tensor,
-        centre: Tuple[int, int],
-        spread: Tuple[int, int],
+        centre: tp.Tuple[int, int],
+        spread: tp.Tuple[int, int],
         angle: float = 0.0,
-        weights: Union[pt.Tensor, float] = None,
-    ) -> Tuple[pt.Tensor, pt.Tensor]:
+        weights: tp.Union[pt.Tensor, float] = None,
+    ) -> tp.Tuple[pt.Tensor, pt.Tensor]:
         """
-        2D flat kernel with a given centre, spread and rotation angle.
+        2D uniform kernel with a given centre, spread and rotation angle.
 
         Args:
             substrate (pt.Tensor):
                 Coordinate substrate as a tensor with shape (N, 2).
                 Could be sparse.
 
-            centre (Tuple[int, float]):
+            centre (tp.Tuple[int, float]):
                 Coordinates of the centre of the kernel.
 
-            spread (Tuple[int, float]):
+            spread (tp.Tuple[int, float]):
                 Spread of the kernel (e.g., semi-major axes in the case of elliptic kernels).
 
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
-            weights (Union[pt.Tensor, float], optional):
+            weights (tp.Union[pt.Tensor, float], optional):
                 Weights of the kernel. Defaults to None.
                 If provided as a `float`, all kernels will have the same weight.
 
@@ -363,7 +383,7 @@ class ReceptiveFields(Logging):
                 kernel shape. Defaults to "elliptic".
 
         Returns:
-            Tuple[pt.Tensor, pt.Tensor]:
+            tp.Tuple[pt.Tensor, pt.Tensor]:
                 Values and indices of the kernel (suitable for a sparse tensor).
         """
 
@@ -393,9 +413,9 @@ class ReceptiveFields(Logging):
         centre: pt.Tensor,
         spread: pt.Tensor,
         angle: float = 0.0,
-        sd: Union[Tuple[float, ...], float] = (0.37, 0.37),
+        sd: tp.Union[tp.Tuple[float, ...], float] = (0.37, 0.37),
         normalise: bool = True,
-    ) -> Tuple[pt.Tensor, pt.Tensor]:
+    ) -> tp.Tuple[pt.Tensor, pt.Tensor]:
         """
         2D Gaussian kernel with a given mean, SD and rotation angle.
 
@@ -404,16 +424,16 @@ class ReceptiveFields(Logging):
                 Coordinate substrate as a tensor with shape (N, 2).
                 Could be sparse.
 
-            centre (Tuple[int, float]):
+            centre (tp.Tuple[int, float]):
                 Coordinates of the centre of the kernel.
 
-            spread (Tuple[int, float]):
+            spread (tp.Tuple[int, float]):
                 Spread of the kernel (e.g., semi-major axes in the case of elliptic kernels).
 
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
-            sd (Union[Tuple[float, ...], float], optional):
+            sd (tp.Union[tp.Tuple[float, ...], float], optional):
                 Standard deviation of the kernel in x and y directions
                 as a percentage of the spread. Defaults to (0.37, 0.37).
                 This is approximately one standard deviation.
@@ -425,7 +445,7 @@ class ReceptiveFields(Logging):
                 Toggle for Gaussian normalisation. Defaults to True.
 
         Returns:
-            Tuple[pt.Tensor, pt.Tensor]:
+            tp.Tuple[pt.Tensor, pt.Tensor]:
                 Values and indices of the kernel (suitable for a sparse tensor).
         """
 
@@ -463,11 +483,11 @@ class ReceptiveFields(Logging):
         centre: pt.Tensor,
         spread: pt.Tensor,
         angle: float = 0.0,  # Orientation [deg]
-        sd: Union[Tuple[float, ...], float] = (0.37, 0.37),
+        sd: tp.Union[tp.Tuple[float, ...], float] = (0.37, 0.37),
         frequency: float = 0.1,  # Sine component frequency
         aspect: float = 0.1,  # Aspect ratio
         phase: float = 0.0,  # Phase of the sine component
-    ) -> Tuple[pt.Tensor, pt.Tensor]:
+    ) -> tp.Tuple[pt.Tensor, pt.Tensor]:
         """
         Gabor filters.
 
@@ -481,16 +501,16 @@ class ReceptiveFields(Logging):
                 Coordinate substrate as a tensor with shape (N, 2).
                 Could be sparse.
 
-            centre (Tuple[int, float]):
+            centre (tp.Tuple[int, float]):
                 Coordinates of the centre of the kernel.
 
-            spread (Tuple[int, float]):
+            spread (tp.Tuple[int, float]):
                 Spread of the kernel (e.g., semi-major axes in the case of elliptic kernels).
 
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
-            sd (Union[Tuple[float, ...], float], optional):
+            sd (tp.Union[tp.Tuple[float, ...], float], optional):
                 Standard deviation of the kernel in x and y directions
                 as a percentage of the spread. Defaults to (0.37, 0.37).
                 This is approximately one standard deviation.
@@ -505,7 +525,7 @@ class ReceptiveFields(Logging):
                 Sine phase. Defaults to 0.0
 
         Returns:
-            Tuple[pt.Tensor, pt.Tensor]:
+            tp.Tuple[pt.Tensor, pt.Tensor]:
                 Values and indices of the kernel (suitable for a sparse tensor).
         """
         pass
@@ -513,7 +533,7 @@ class ReceptiveFields(Logging):
     def _trim_to_vf(
         self,
         coordinates: pt.Tensor,
-    ) -> Tuple[pt.Tensor, ...]:
+    ) -> tp.Tuple[pt.Tensor, ...]:
         """
         Trim the coordinates of the receptive fields to the
         dimensions of the visual field.
@@ -523,7 +543,7 @@ class ReceptiveFields(Logging):
                 Pixel coordinates of the receptive field.
 
         Returns:
-            Tuple[pt.Tensor, ...]:
+            tp.Tuple[pt.Tensor, ...]:
                 A tuple containing:
                     1. The trimmed coordinates.
                     2. The mask that trims the coordinates to the visual field
@@ -564,8 +584,8 @@ class ReceptiveFields(Logging):
 
     def _extract_segment_indices(
         self,
-        container: Iterable,
-    ) -> List[pt.Tensor]:
+        container: tp.Iterable,
+    ) -> tp.List[pt.Tensor]:
         """
         Extract the indices of a specific segment.
         For now, this is limited to rings and sectors,
@@ -574,7 +594,7 @@ class ReceptiveFields(Logging):
         coordinate indices are sorted appropriately.
 
         Args:
-            container (Iterable):
+            container (tp.Iterable):
                 An iterable containing tuples of some metric
                 (e.g., radius, angle, etc.) and its index.
                 The container should be sorted in such a way
@@ -582,7 +602,7 @@ class ReceptiveFields(Logging):
                 portion of the container.
 
         Returns:
-            List[pt.Tensor]:
+            tp.List[pt.Tensor]:
                 The indices of the coordinates of the segment.
         """
 
@@ -622,7 +642,7 @@ class ReceptiveFields(Logging):
         # so we can just iterate over the array.
         # ==================================================
         ring_indices = list(zip(logpolar[:, 1], indices))
-        self.rings = self._extract_segment_indices(ring_indices)
+        self.cell_rings = self._extract_segment_indices(ring_indices)
 
         # Extract the coordinates of each sector.
         # Sort the polar coordinates by radius.
@@ -634,13 +654,13 @@ class ReceptiveFields(Logging):
             (item[0][0], item[1])
             for item in sorted(zip(logpolar, indices), key=lambda x: x[0][1])
         ]
-        self.sectors = self._extract_segment_indices(sector_indices)
+        self.cell_sectors = self._extract_segment_indices(sector_indices)
 
     def _compute_sparse_coordinates(
         self,
         rho_max: int,
         rho_fovea: int,
-    ) -> Tuple[pt.Tensor, int]:
+    ) -> tp.Tuple[pt.Tensor, int]:
         """
         Create the sparse coordinates for the receptive fields.
 
@@ -668,7 +688,7 @@ class ReceptiveFields(Logging):
                 the spatial mean illumination would make no sense.
 
         Returns:
-            Tuple[pt.Tensor, int]:
+            tp.Tuple[pt.Tensor, int]:
                 A tuple containing:
                     1. The sparse coordinates of the receptive fields.
                     2. The maximal size of the receptive fields.
@@ -905,9 +925,11 @@ class ReceptiveFields(Logging):
                 dtype=conf.dtype,
             )
             .coalesce()
-            .to_sparse_csr()
+            .to_sparse_csc()
             .to(conf.device)
         )
+
+        self.debug(f"RF sparsity: {100 * self.rfs._nnz() / np.prod(self.rfs.shape):3.4}%")
 
         # Store various useful tensors and scalars.
         #
@@ -915,9 +937,9 @@ class ReceptiveFields(Logging):
         # These might be redundant, but for now they
         # can be used for visualisation purposes.
         # ==================================================
-        self.rows = rows
-        self.cols = cols
-        self.vals = sparse_vals
+        self.rf_rows = rows
+        self.rf_cols = cols
+        self.rf_vals = sparse_vals
         self.cell_coordinates = pt.vstack(cell_coordinates)
         self.rf_sizes = pt.vstack(rf_sizes)
         self.neuron_count = neuron_count

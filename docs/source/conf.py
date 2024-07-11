@@ -69,7 +69,7 @@ autodoc_typehints = "description"
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["templates"]
 
-# List of patterns, relative to source directory, that match files and
+# tp.List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []

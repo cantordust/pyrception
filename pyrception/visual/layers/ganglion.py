@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import torch as pt
@@ -28,14 +28,14 @@ class GanglionLayer(BaseLayer):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         bipolar: BipolarLayer,
         amacrine: AmacrineLayer,
         sectors: int = 64,
         name: str = "Ganglion",
-        inhibition_scale: float = 1.25,
-        bipolar_params: Dict[str, Any] = None,
-        amacrine_params: Dict[str, Any] = None,
+        inhibition_scale: float = 1.0,
+        bipolar_params: tp.Dict[str, tp.Any] = None,
+        amacrine_params: tp.Dict[str, tp.Any] = None,
     ):
 
         # Initialise the base
@@ -110,7 +110,7 @@ class GanglionLayer(BaseLayer):
         amacrine_rf_colour: int = "#00ff00ff",
         *args,
         **kwargs,
-    ) -> Tuple[plt.Figure, plt.Axes, List, np.ndarray]:
+    ) -> tp.Tuple[plt.Figure, plt.Axes, tp.List, np.ndarray]:
         """
         Plot the receptive fields of amacrine cells.
         This takes into account the sparsity of bipolar cells.
@@ -124,7 +124,7 @@ class GanglionLayer(BaseLayer):
                 The colour to use for highlighting the plotted amacrine cells.
 
         Returns:
-            Tuple[plt.Figure, plt.Axes, List]:
+            tp.Tuple[plt.Figure, plt.Axes, tp.List]:
                 A tuple containing:
                     1. A Figure object.
                     2. An Axes object.

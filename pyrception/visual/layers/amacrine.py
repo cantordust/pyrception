@@ -1,4 +1,4 @@
-from typing import *
+import typing as tp
 
 # --------------------------------------
 import torch as pt
@@ -13,11 +13,11 @@ class AmacrineLayer(BaseLayer):
 
     def __init__(
         self,
-        size: Tuple[int, ...],
+        size: tp.Tuple[int, ...],
         bipolar: BipolarLayer,
         sectors: int = 32,
         name: str = "Amacrine",
-        rf_params: Dict[str, Any] = None,
+        rf_params: tp.Dict[str, tp.Any] = None,
     ):
 
         # Initialise the base
