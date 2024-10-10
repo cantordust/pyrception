@@ -1,26 +1,9 @@
 name: pyrception
 channels:
-  - pytorch
   - conda-forge
 dependencies:
-  - python=3.11
-  - bokeh
-  - h5py
-  - ipykernel
-  - ipympl
-  - loguru
-  - matplotlib
-  - nbsphinx
-  - numpy
-  - opencv
+  - python=3.12
+  - notebook
   - pip
-  - python-decouple
-  - pytorch
-  - scikit-image
-  - scipy
-  - sphinx
-  - tqdm
   - pip:
-      - manim
-      - furo
       - -e .

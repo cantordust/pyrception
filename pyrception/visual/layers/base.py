@@ -1,9 +1,6 @@
 import typing as tp
 
 # --------------------------------------
-import torch as pt
-
-# --------------------------------------
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 
@@ -24,24 +21,26 @@ class BaseLayer(Logging):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
         name: str = "Base layer",
     ):
         super().__init__(name)
 
         self.info("Initialising...")
 
-        # Check if the layer size is valid.
+        # Check if the layer shape is valid.
         # Order: height, width, depth
-        if len(size) not in (2, 3):
+        if len(shape) not in (2, 3):
             raise ValueError(
-                f"The layer size must have 2 or 3 dimensions ({len(size)} provided)."
+                f"The layer size must have 2 or 3 dimensions ({len(shape)} provided)."
             )
-        if len(size) == 2:
-            # Add a depth of 1 if it is missing
-            size += (1,)
 
-        self.size = size
+        shape = tuple(shape)
+        if len(shape) == 2:
+            # Add a depth of 1 if it is missing
+            shape += (1,)
+
+        self.shape = shape
         self.name = name
 
     def _flatten(
@@ -65,7 +64,7 @@ class BaseLayer(Logging):
 
         elif isinstance(container, tp.Iterable):
             for element in container:
-                if isinstance(element, pt.Tensor):
+                if isinstance(element, np.ndarray):
                     element = element.tolist()
                 array.extend(self._flatten(element))
 
@@ -76,7 +75,7 @@ class BaseLayer(Logging):
         colour: tp.Union[str, tp.Iterable],
     ) -> np.ndarray:
         """
-        Convert a colour specified as
+        Convert a colour specified as HEX into RGBA (a 4-tuple).
 
         Args:
             colour (tp.Union[str, tp.Iterable]):
@@ -101,8 +100,8 @@ class BaseLayer(Logging):
         self,
         rfs: ReceptiveFields,
         cells: tp.Union[tp.List[int], tp.Tuple[int]] = None,
-        cell_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#00ffffff",
-        rf_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#ff00ff33",
+        cell_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#00ffff",
+        rf_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#ff00ff",
         title: str = "Receptive fields",
         figsize: tp.Tuple = (8, 6),
         canvas: np.ndarray = None,
@@ -150,18 +149,15 @@ class BaseLayer(Logging):
         """
         # Bipolar cell input for a single amacrine cell
         if canvas is None:
-            canvas = np.zeros((rfs.height, rfs.width, 4))
+            canvas = np.zeros((rfs.height, rfs.width, 3))
 
         elif len(canvas.shape) == 2:
-            canvas = np.vstack([canvas] * 4)
+            canvas = np.vstack([canvas] * 3)
 
-        elif len(canvas) == 3:
-            canvas = np.vstack((canvas, np.ones((canvas.shape[0], canvas.shape[1]))))
-
-        # Convert HEX colours to RGBA
+        # Convert HEX colours to RGB
         # ==================================================
-        cell_colour = self._to_rgba(cell_colour)
-        rf_colour = self._to_rgba(rf_colour)
+        cell_colour = self._to_rgba(cell_colour)[:-1]
+        rf_colour = self._to_rgba(rf_colour)[:-1]
 
         # Process the requested cell coordinates.
         # ==================================================
@@ -175,17 +171,22 @@ class BaseLayer(Logging):
         # ==================================================
         if rf_colour is not None:
             for c in cells:
-                canvas[rfs.rf_rows[c], rfs.rf_cols[c]] += rf_colour
+                canvas[
+                    rfs.rf_rows[c],
+                    rfs.rf_cols[c],
+                ] += rf_colour * rfs.rf_vals[c]
+
+        # Normalise
+        canvas /= canvas.max()
 
         # Plot the cells last so that they are superimposed
         # on top of the receptive fields.
         # ==================================================
-        cell_coords = rfs.cell_coordinates
         if cell_colour is not None:
             for c in cells:
                 canvas[
-                    cell_coords[c, 0],
-                    cell_coords[c, 1],
+                    rfs.cell_coordinates[c, 0],
+                    rfs.cell_coordinates[c, 1],
                 ] = cell_colour
 
         # Now actually plot everything onto the canvas
@@ -206,20 +207,21 @@ class BaseLayer(Logging):
 
         return (fig, axes, mappables, canvas)
 
+
     def convolve(
         self,
-        rfs: pt.Tensor,
-        vector: pt.Tensor,
-    ) -> pt.Tensor:
+        rfs: np.ndarray,
+        vector: np.ndarray,
+    ) -> np.ndarray:
         """
         Convolve the unrolled input vector with the current layer's receptive field.
 
         Args:
-            frame (pt.Tensor):
+            frame (np.ndarray):
                 The input frame, unrolled into a 1D vector.
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The convolved frame.
         """
 
@@ -227,4 +229,4 @@ class BaseLayer(Logging):
         # Explore alternatives for matrix operations
         # (SciPy, CuPy, Trilinos...)
         # ==================================================
-        return pt.sparse.mm(rfs, vector)
+        return rfs @ vector

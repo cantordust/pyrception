@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+# --------------------------------------
 import typing as tp
 
 # --------------------------------------
@@ -17,13 +20,74 @@ import numpy as np
 import enum
 
 # --------------------------------------
-from pprint import pp
+from PySide6.QtCore import Slot
 
 # --------------------------------------
-import torch as pt
+from pyqtgraph.parametertree import Parameter
+
+"""
+===================================[ NOTE ]===================================
+Enumerators
+==============================================================================
+"""
 
 
-class RFArrangement(enum.Enum):
+class AuxEnum(enum.Enum):
+
+    @classmethod
+    def get(
+        cls: enum.Enum,
+        key: str,
+        default: enum.Enum = None,
+    ):
+        _key = key.lower()
+        for dt in cls:
+            if dt.name.lower() == _key:
+                return dt
+        return default
+
+    @classmethod
+    def get_value(
+        cls: enum.Enum,
+        key: str,
+    ) -> tp.Optional[enum.Enum]:
+        item = cls.get(key)
+        return None if item is None else item.value
+
+    @classmethod
+    def contains(
+        cls: enum.Enum,
+        key: str,
+    ) -> bool:
+        """
+        Check if a log key is valid.
+
+        Args:
+            key (str):
+                The key to query for.
+
+        Returns:
+            bool:
+                Indicator if the key was found.
+        """
+        return cls.get(key) is not None
+
+    @classmethod
+    def names(cls):
+        return {o.name: o for o in cls}
+
+
+class InputType(AuxEnum):
+    """
+    Input type.
+    """
+
+    Image = enum.auto()
+    Video = enum.auto()
+    Events = enum.auto()
+
+
+class RFArrangement(AuxEnum):
     """
     Receptive field distribution.
     """
@@ -32,9 +96,9 @@ class RFArrangement(enum.Enum):
     Cartesian = enum.auto()
 
 
-class KernelFilter(enum.Enum):
+class KernelFilter(AuxEnum):
     """
-    Receptive field organisation.
+    Filter implemented by the receptive field.
     """
 
     Uniform = enum.auto()
@@ -42,7 +106,7 @@ class KernelFilter(enum.Enum):
     Gabor = enum.auto()
 
 
-class KernelShape(enum.Enum):
+class KernelShape(AuxEnum):
     """
     Receptive field shape.
     """
@@ -51,39 +115,21 @@ class KernelShape(enum.Enum):
     Rectangular = enum.auto()
 
 
-class DType(enum.Enum):
+class DType(AuxEnum):
     """
-    Pytorch tensor dtype.
-
-    Raises:
-        ValueError:
-            Error raised if the provided dtype is invalid.
-
-    Returns:
-        pt.dtype:
-            PyTorch dtype.
+    NumPy data type.
     """
 
-    F16 = pt.half
-    F32 = pt.float
-    F64 = pt.double
-    I8 = pt.int8
-    I16 = pt.int16
-    I32 = pt.int32
-    I64 = pt.int64
-    U8 = pt.uint8
-
-    @staticmethod
-    def get(dtype: str):
-        _dtype = dtype.lower()
-        for dt in DType:
-            if dt.name.lower() == _dtype:
-                return dt.value
-
-        raise ValueError(f"Invalid dtype '{dtype}'")
+    F32 = np.float32
+    F64 = np.double
+    I8 = np.int8
+    I16 = np.int16
+    I32 = np.int32
+    I64 = np.int64
+    U8 = np.uint8
 
 
-class LogLevel(enum.Enum):
+class LogLevel(AuxEnum):
     """
     Enum class that facilitates the configuration of logging levels.
     """
@@ -96,31 +142,12 @@ class LogLevel(enum.Enum):
     Error = "<light-red>"
     Critical = "<red>"
 
-    @staticmethod
-    def contains(level: str) -> tp.Optional[str]:
-        """
-        Check if a log level is valid.
 
-        Returns:
-            tp.Optional[str]:
-                The level (as an uppercase string)
-                or None if the level is invalid.
-        """
-        level = level.upper()
-        for lvl in LogLevel:
-            if lvl.name.upper() == level:
-                return level
-
-        return
-
-    @staticmethod
-    def colourise():
-        """
-        Colourise the log output.
-        """
-
-        for level in LogLevel:
-            logger.level(level.name.upper(), color=level.value)
+"""
+===================================[ NOTE ]===================================
+Dataclasses
+==============================================================================
+"""
 
 
 @dataclass
@@ -139,18 +166,18 @@ class KernelParams:
             The filter response type for receptive fields in this layer.
             Defaults to KernelFilter.Uniform.
 
-        scale (float), optional):
+        scale (float, optional):
             A scaling factor for kernels.
             Defaults to 1.0.
             Larger values result in kernels that may overlap more,
             while smaller values may result in kernels that leave gaps in
             the visual field.
 
-        min_size (pt.Tensor, optional):
+        min_size (np.ndarray, optional):
             Minimal kernel size (usually restricted to the foveal region).
             Defaults to (1, 1).
 
-        aspect (pt.Tensor, optional):
+        aspect (np.ndarray, optional):
             Aspect ratio of the kernel.
             Defaults to (1.0, 1.0).
 
@@ -162,11 +189,11 @@ class KernelParams:
     shape: KernelShape = KernelShape.Elliptic
     filter: KernelFilter = KernelFilter.Uniform
     scale: float = 1.0
-    min_size: pt.Tensor = field(
-        default_factory=lambda: pt.tensor([1, 1], dtype=pt.int32)
+    min_size: np.ndarray = field(
+        default_factory=lambda: np.array([1, 1], dtype=np.int32)
     )
-    aspect: pt.Tensor = field(
-        default_factory=lambda: pt.tensor([1.0, 1.0], dtype=pt.float32)
+    aspect: np.ndarray = field(
+        default_factory=lambda: np.array([1.0, 1.0], dtype=np.float32)
     )
     params: tp.Dict[str, tp.Any] = field(default_factory=dict)
 
@@ -175,20 +202,42 @@ class KernelParams:
         # Validate the min_size attribute
         if isinstance(self.min_size, (float, int)):
             self.min_size = [self.min_size, self.min_size]
-        if not isinstance(self.min_size, pt.Tensor):
-            self.min_size = pt.tensor(self.min_size, dtype=pt.int32)
+        if isinstance(self.min_size, np.ndarray):
+            self.min_size = self.min_size.astype(np.int32)
+        else:
+            self.min_size = np.array(self.min_size, dtype=np.int32)
 
         # Validate the aspect attribute
         if isinstance(self.aspect, (float, int)):
             self.aspect = [self.aspect, self.aspect]
-        if not isinstance(self.aspect, pt.Tensor):
-            self.aspect = pt.tensor(self.aspect, dtype=pt.float32)
+        if isinstance(self.aspect, np.ndarray):
+            self.aspect = self.aspect.astype(np.float32)
+        else:
+            self.aspect = np.array(self.aspect, dtype=np.float32)
+
+
+@dataclass
+class RFParams:
+    '''
+    A dataclass for receptive field parameters
+    '''
+
+    substrate: np.ndarray = None
+    sectors: int = 32
+    extent: float = 1.0
+    arrangement: RFArrangement = RFArrangement.LogPolar
+    inverse: bool = False
+    dense: bool = False
+    create_feedback: bool = False
+    name: str = "Receptive fields"
+    kernel_params: KernelParams = None
+
 
 @dataclass
 class PlotEntry:
-    '''
+    """
     A convenience class for plotting parameters.
-    '''
+    """
 
     data: np.ndarray
     plottype: str = None
@@ -200,26 +249,32 @@ class PlotEntry:
     ylabel: str = ""
     title: str = ""
 
+
 @dataclass
 class ImagePlot(PlotEntry):
-    '''
+    """
     A convenience class for plotting parameters for images.
-    '''
+    """
 
     plottype: str = "image"
     cmap: str = "grey"
     norm: colors.Normalize = colors.Normalize()
+    canvas: np.ndarray = None
+
 
 @dataclass
 class ScatterPlot(PlotEntry):
-    '''
+    """
     A convenience class for plotting parameters for scatter plots.
-    '''
+    """
 
     plottype: str = "scatter"
     marker: str = "."
     colour: str = "#00ffff"
     size: float = 0.5
+    x: np.ndarray = None
+    y: np.ndarray = None
+
 
 @dataclass
 class Dim:

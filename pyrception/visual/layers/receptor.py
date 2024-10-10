@@ -1,11 +1,6 @@
 import typing as tp
 
 # --------------------------------------
-import torch as pt
-from torch.nn import functional as ptf
-from torch.distributions import OneHotCategorical
-
-# --------------------------------------
 import numpy as np
 
 # --------------------------------------
@@ -35,28 +30,30 @@ class ReceptorLayer(BaseLayer):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
+        scale: float = 1.0,
         saccades: bool = False,
-        mode: tp.Optional[int] = cv.COLOR_RGB2GRAY,
+        greyscale: bool = True,
         name: str = "Receptor",
     ):
 
         # Initialise the base
-        super().__init__(size, name)
+        super().__init__(shape, name)
 
         self.saccades = saccades
-        self.mode = mode  # TODO: Connect this to the dimensionality of the input.
+        # TODO: Connect this to the dimensionality of the input.
+        self.greyscale = greyscale
 
         # Dimensionality of the input.
         # The padded version is used for saccades.
         self.dims = self._compute_dimensions()
 
         # Create a flatmask
-        self.flatmask = self._make_flatmask(mode)
+        self.flatmask = self._make_flatmask()
 
         # Receptive fields
         self.rfs = ReceptiveFields(
-            self.size,
+            self.shape,
             name=f"{name} RFs",
         )
 
@@ -75,7 +72,7 @@ class ReceptorLayer(BaseLayer):
                 Dimensions of the visual field, optionally padded.
         """
         # This is just for convenience
-        (height, width, depth) = self.size
+        (height, width, depth) = self.shape
 
         dims = Dims(Dim(height, width, depth))
 
@@ -92,54 +89,54 @@ class ReceptorLayer(BaseLayer):
 
         # The frame is padded only at the top and the bottom,
         # but the left and right padding values are used
-        # to compute the size of the retinal field below.
+        # to compute the shape of the retinal field below.
         dims.padding = np.array([lr_padding, lr_padding, tb_padding, tb_padding])
 
         return dims
 
     def _pad(
         self,
-        frame: pt.Tensor,
+        frame: np.ndarray,
         padding: tp.Tuple[int, int, int, int],
-    ) -> pt.Tensor:
+    ) -> np.ndarray:
         """
         Pad the frame so that we can shift the FOV
         without making the frame 'jump'.
         This is part of the implementation of saccadic movements.
 
         Args:
-            frame (pt.Tensor):
+            frame (np.ndarray):
                 Frame to be padded.
 
             padding (tp.Tuple[int, int, int, int]):
-                Padding extents in PyTorch order (left, right, top, bottom).
+                Padding extents in the following order: (left, right, top, bottom).
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The padded frame.
         """
 
-        padded = ptf.pad(frame, padding)
+        padded = np.pad(frame, padding)
 
         return padded
 
     def _unpad(
         self,
-        tensor: pt.Tensor,
+        tensor: np.ndarray,
         padding: tp.Tuple[int, int, int, int],
-    ) -> pt.Tensor:
+    ) -> np.ndarray:
         """
         Unpad a frame padded with _pad().
 
         Args:
-            tensor (pt.Tensor):
+            tensor (np.ndarray):
                 Padded tensor.
 
             padding (tp.Tuple[int, int, int, int]):
-                Amount of padding in PyTorch order (left, right, top, bottom).
+                Padding extents in the following order: (left, right, top, bottom).
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 Unpadded tensor.
         """
 
@@ -150,35 +147,35 @@ class ReceptorLayer(BaseLayer):
 
     def _as_image(
         self,
-        tensor: pt.Tensor,
-    ) -> pt.Tensor:
+        frame: np.ndarray,
+    ) -> np.ndarray:
         """
         Convert a tensor to an 8-bit image frame.
 
         Args:
-            tensor (pt.Tensor):
+            tensor (np.ndarray):
                 Frame to be converted into an 8-bit integer NumPy array.
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The 8-bit frame.
         """
 
-        tmin = tensor.min()
+        tmin = frame.min()
 
-        return (255 * (tensor - tmin) / (tensor.max() - tmin + 1e-8)).type(pt.uint8)
+        return (255 * (frame - tmin) / (frame.max() - tmin + 1e-8)).astype(np.uint8)
 
     def _scale(
         self,
-        tensor: pt.Tensor,
+        tensor: np.ndarray,
         min: tp.Optional[float] = 0.0,
         max: tp.Optional[float] = 255.0,
-    ) -> pt.Tensor:
+    ) -> np.ndarray:
         """
         Min-max normalised version of the frame.
 
         Args:
-            tensor (pt.Tensor):
+            tensor (np.ndarray):
                 The tensor to be normalised.
 
             min (tp.Optional[float], optional):
@@ -188,7 +185,7 @@ class ReceptorLayer(BaseLayer):
                 Maximal value. Defaults to 255.0.
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The normalised tensor.
         """
 
@@ -199,17 +196,17 @@ class ReceptorLayer(BaseLayer):
 
     def _stretch(
         self,
-        tensor: pt.Tensor,
-    ) -> pt.Tensor:
+        tensor: np.ndarray,
+    ) -> np.ndarray:
         """
         Stretch a 2D or 3D input (image) into a 1D vector.
 
         Args:
-            tensor (pt.Tensor):
+            tensor (np.ndarray):
                 The tensor to flatten.
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The flattened tensor
         """
 
@@ -224,15 +221,15 @@ class ReceptorLayer(BaseLayer):
 
     def _fold(
         self,
-        tensor: pt.Tensor,
+        tensor: np.ndarray,
         height: int,
         width: int,
-    ) -> pt.Tensor:
+    ) -> np.ndarray:
         """
         Fold a 1D vector into a 2D tensor.
 
         Args:
-            tensor (pt.Tensor):
+            tensor (np.ndarray):
                 Tensor to be folded.
 
             height (int):
@@ -242,7 +239,7 @@ class ReceptorLayer(BaseLayer):
                 Width of the resulting tensor.
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The folded tensor.
         """
 
@@ -267,7 +264,7 @@ class ReceptorLayer(BaseLayer):
 
         Returns:
             tp.Tuple[int, ...]:
-                A tuple containing the padding in PyTorch order (left, right, top, bottom).
+                Padding extents in the following order: (left, right, top, bottom).
         """
 
         # TODO
@@ -288,31 +285,24 @@ class ReceptorLayer(BaseLayer):
 
         return padding
 
-    def _make_flatmask(
-        self,
-        mode: tp.Optional[int] = None,
-    ) -> pt.Tensor:
+    def _make_flatmask(self) -> np.ndarray:
         """
         Create a mask that can be used to obtain a flattened
         version of the original image with colour channel sampling.
 
         WIP: Needs to be tested.
 
-        Args:
-            mode (tp.Optional[int], optional):
-                Masking mode. Defaults to None.
-
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The mask to be applied to the raw input.
         """
 
-        if self.dims.original.depth == 1 or mode is None:
+        if self.dims.original.depth == 1 or self.greyscale:
             return
 
-        self.debug(f"Creating flatmask...")
+        self.debug("Creating flatmask...")
 
-        probs = pt.zeros(self.size, dtype=conf.dtype)
+        probs = np.zeros(self.shape, dtype=conf.dtype)
 
         r_prob = 0.475
         g_prob = 0.475
@@ -322,27 +312,27 @@ class ReceptorLayer(BaseLayer):
         probs[:, :, 1] = g_prob  # G channel
         probs[:, :, 2] = b_prob  # B channel
 
-        ohc = OneHotCategorical(probs)
+        # ohc = np.random.choice(self.shape, n, p=r_prob)
 
         return ohc.sample()
 
     def forward(
         self,
-        frame: pt.Tensor,
+        frame: np.ndarray,
         offset: tp.Optional[tp.Tuple[float, float]] = None,
-    ) -> pt.Tensor:
+    ) -> np.ndarray:
         """
         Read the input and apply a certain offset if saccades are enabled.
 
         Args:
-            frame (pt.Tensor):
+            frame (np.ndarray):
                 The raw input.
 
             offset (tp.Optional[tp.Tuple[float, float]], optional):
                 Padding for saccades. Defaults to None.
 
         Returns:
-            pt.Tensor:
+            np.ndarray:
                 The frame with optional padding (for saccades).
         """
 

@@ -1,7 +1,7 @@
 import typing as tp
 
 # --------------------------------------
-import torch as pt
+import numpy as np
 
 # --------------------------------------
 from pyrception import conf
@@ -22,7 +22,7 @@ class BipolarLayer(BaseLayer):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
         receptor: ReceptorLayer,
         horizontal: HorizontalLayer,
         sectors: int = 64,
@@ -32,7 +32,7 @@ class BipolarLayer(BaseLayer):
     ):
 
         # Initialise the base
-        super().__init__(size, name)
+        super().__init__(shape, name)
         self.receptor = receptor
         self.horizontal = horizontal
 
@@ -41,7 +41,7 @@ class BipolarLayer(BaseLayer):
             rf_params = {}
         rf_params.setdefault("name", f"{name} | Bipolar RFs")
         self.rfs = ReceptiveFields(
-            self.size,
+            self.shape,
             receptor.rfs.cell_coordinates,
             sectors,
             **rf_params,
@@ -49,7 +49,7 @@ class BipolarLayer(BaseLayer):
         self.rfs.make_rfs()
 
         # Temporal exponential running mean
-        self.mean = pt.zeros((self.rfs.neuron_count,), device=conf.device)
+        self.mean = np.zeros((self.rfs.neuron_count,))
 
         self.forgetting_range = forgetting_range
 
@@ -57,8 +57,8 @@ class BipolarLayer(BaseLayer):
         self.alpha = self._compute_forgetting_rate()
 
         # Activations for the ON and OFF pathways
-        self.on = pt.zeros((self.rfs.neuron_count,))
-        self.off = pt.zeros_like(self.on)
+        self.on = np.zeros((self.rfs.neuron_count,))
+        self.off = np.zeros_like(self.on)
 
         self.info("Initialised.")
 
@@ -66,7 +66,7 @@ class BipolarLayer(BaseLayer):
         hr = self.rfs.cell_coordinates[:, 0] - self.rfs.height // 2
         wr = self.rfs.cell_coordinates[:, 1] - self.rfs.width // 2
 
-        distances = pt.sqrt(hr**2 + wr**2)
+        distances = np.sqrt(hr**2 + wr**2)
         alpha_min = self.forgetting_range[0]
         alpha_max = self.forgetting_range[1]
 
@@ -81,17 +81,16 @@ class BipolarLayer(BaseLayer):
 
         return alpha
 
-    def forward(self) -> tp.Tuple[pt.Tensor, ...]:
+    def forward(self) -> tp.Tuple[np.ndarray, ...]:
         """
         The bipolar layer splits the input into ON and OFF pathways.
 
         Returns:
-            tp.Tuple[pt.Tensor, ...]:
+            tp.Tuple[np.ndarray, ...]:
                 A tuple containing:
                     1. The activation of ON bipolar cells.
                     2. The activation of OFF bipolar cells.
-                    3. The scaled signal (raw input signal
-                        sans feedback from the horizontal cells).
+                    3. The scaled signal (raw input signal sans feedback from the horizontal cells).
                     4. The raw (postsynaptic) activation of the bipolar cells.
         """
 
@@ -100,12 +99,12 @@ class BipolarLayer(BaseLayer):
         scaled_signal = self.receptor.activation - self.horizontal.feedback
 
         # Compute the nominal activation for each bipolar cell
-        activation = self.convolve(self.rfs.rfs, scaled_signal)
+        activation = self.convolve(self.rfs.forward_synapses, scaled_signal)
 
         # Compute the on and off activations
         diff = activation - self.mean
-        self.on = pt.log1p(pt.relu(diff))
-        self.off = pt.log1p(pt.relu(-diff))
+        self.on = np.log1p(np.where(diff > 0, diff, 0))
+        self.off = np.log1p(np.where(diff < 0, -diff, 0))
 
         # Update the running mean (low-pass filter)
         self.mean += self.alpha * diff

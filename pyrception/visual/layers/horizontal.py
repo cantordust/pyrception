@@ -1,7 +1,7 @@
 import typing as tp
 
 # --------------------------------------
-import torch as pt
+import numpy as np
 
 # --------------------------------------
 import matplotlib.pyplot as plt
@@ -17,7 +17,7 @@ class HorizontalLayer(BaseLayer):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
         receptor: ReceptorLayer,
         sectors: int = 32,
         name: str = "Horizontal",
@@ -25,18 +25,18 @@ class HorizontalLayer(BaseLayer):
     ):
 
         # Initialise the base
-        super().__init__(size, name)
+        super().__init__(shape, name)
         self.receptor = receptor
 
         # Initialise the receptive fields.
         if rf_params is None:
             rf_params = {}
         rf_params.setdefault("name", f"{name} | Horizontal RFs")
+        rf_params.setdefault("create_feedback", True)
         self.rfs = ReceptiveFields(
-            self.size,
+            self.shape,
             receptor.rfs.cell_coordinates,
             sectors,
-            compute_factors=True,
             **rf_params,
         )
         self.rfs.make_rfs()
@@ -45,37 +45,19 @@ class HorizontalLayer(BaseLayer):
         self.activation = None
 
         # Feedback matrix.
-        self.feedback = pt.zeros(
-            (self.rfs.height * self.rfs.width,),
-            dtype=conf.dtype,
-            device=conf.device,
-        )
-
-        # Indices
-        self.feedback_indices = [
-            cols + self.rfs.width * rows
-            for rows, cols in zip(self.rfs.rf_rows, self.rfs.rf_cols)
-        ]
+        self.feedback = None
 
         self.info("Initialised.")
 
     def forward(self):
 
         # Compute the activation of the horizontal cells
-        self.activation = self.convolve(
-            self.rfs.rfs,
-            self.receptor.activation,
-        )
+        self.activation = self.convolve(self.rfs.forward_synapses, self.receptor.activation)
 
         # The feedback signal (spatial mean) fed
         # back to the receptors.
         # ==================================================
-        self.feedback.zero_()
-        for idx in range(len(self.activation)):
-            self.feedback[self.feedback_indices[idx]] += self.activation[idx]
-
-        # Scale the feedback for overlapping dendritic fields
-        self.feedback *= self.rfs.rf_factors
+        self.feedback = self.convolve(self.rfs.feedback_synapses, self.activation)
 
         return (self.activation, self.feedback)
 

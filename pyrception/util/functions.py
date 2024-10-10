@@ -7,13 +7,16 @@ from datetime import datetime
 from pathlib import Path
 
 # --------------------------------------
-import shutil
+import skimage as ski
+
+# --------------------------------------
+from tqdm import tqdm
+
+# --------------------------------------
+import av
 
 # --------------------------------------
 import numpy as np
-
-# --------------------------------------
-import torch as pt
 
 # --------------------------------------
 import matplotlib as mpl
@@ -65,7 +68,7 @@ def timestamp(ms: bool = False) -> str:
 
 def plot(
     entries: tp.List[tp.List[PlotEntry]] = None,
-    figsize: tp.Tuple[int, int] = (12, 8),
+    figsize: tp.Tuple[int, int] = (8, 6),
     height: int = None,
     width: int = None,
     title: str = None,
@@ -127,10 +130,10 @@ def plot(
     if entries is None or (isinstance(entries, tp.List) and len(entries) == 0):
         raise ValueError(f"Please provide at least one entry to plot")
     else:
-        if isinstance(entries, (ImagePlot, ScatterPlot, np.ndarray, pt.Tensor)):
+        if isinstance(entries, (ImagePlot, ScatterPlot, np.ndarray, np.ndarray)):
             entries = [[entries]]
 
-        elif isinstance(entries[0], (ImagePlot, ScatterPlot, np.ndarray, pt.Tensor)):
+        elif isinstance(entries[0], (ImagePlot, ScatterPlot, np.ndarray, np.ndarray)):
             entries = [entries]
 
         rows = len(entries)
@@ -155,7 +158,7 @@ def plot(
         for ridx, row in enumerate(entries):
             for cidx, entry in enumerate(row):
 
-                if isinstance(entry, (np.ndarray, pt.Tensor)):
+                if isinstance(entry, (np.ndarray, np.ndarray)):
                     # Expand shortcut entries.
                     # Assume a scatter plot if the array is 1D,
                     # otherwise assume an image.
@@ -209,7 +212,7 @@ def plot(
 
                 elif isinstance(entry, ScatterPlot):
                     (mappable,) = ax.plot(
-                        pt.arange(len(entry.data)),
+                        np.arange(len(entry.data)),
                         entry.data,
                         marker=entry.marker,
                         markersize=entry.size,
@@ -240,6 +243,7 @@ def animate(
     title: str = "",
     fps: int = 30,
     output_dir: Path = Path("./"),
+    timestamp: str = "",
 ) -> tp.Tuple[FuncAnimation, Path]:
     """
     Create an animation from a figure that is being continually updated.
@@ -269,15 +273,18 @@ def animate(
         output_dir (Path, optional):
             Directory where the animation is saved. Defaults to Path("./") (the current directory).
 
+        timestamp (str, optional):
+            Timestamp to append to the file name. Defaults to the current time.
+
     Returns:
         tp.Tuple[FuncAnimation, Path]:
             A tuple containing:
                 1. The animation object.
                 2. The path to the saved animation.
     """
-
-    ts = pcf.timestamp()
-    filename = Path(f"{title.lower().replace(' ','_')}-{ts}")
+    if timestamp == "":
+        timestamp = pcf.timestamp()
+    filename = Path(f"{title.lower().replace(' ','_')}")
 
     try:
 
@@ -286,10 +293,12 @@ def animate(
             animator,
             producer,
             interval=interval,
-            blit=False,
+            blit=True,
             cache_frame_data=False,
         )
         output_dir = Path(output_dir)
+        if timestamp is not None:
+            output_dir /= f"{timestamp}"
         output_dir.mkdir(parents=True, exist_ok=True)
         filename = (output_dir / filename).resolve().absolute()
         filename = filename.with_suffix(f".{format}")
@@ -310,3 +319,63 @@ def animate(
         filename = None
 
     return ani, filename
+
+
+def cartesian_prod(
+    arr1: np.ndarray,
+    arr2: np.ndarray,
+):
+    return np.transpose([np.repeat(arr1, len(arr2)), np.tile(arr2, len(arr1))])
+
+
+def load_image(
+    path: Path,
+    grayscale: bool = False,
+    scale: float = None,
+) -> np.ndarray:
+
+    # Load the image
+    frame = ski.io.imread(path, as_gray=grayscale)
+
+    if scale is not None:
+        frame = ski.transform.rescale(
+            frame,
+            scale,
+            channel_axis=2 if not grayscale else None,
+        )
+
+    return np.expand_dims(ski.util.img_as_ubyte(frame), axis=0)
+
+
+def load_video(
+    path: Path,
+    grayscale: bool = False,
+    scale: float = None,
+    probe: bool = False,
+) -> np.ndarray:
+
+    av.logging.set_level(av.logging.VERBOSE)
+    container = av.open(path)
+
+    v = container.streams.video[0]
+    w, h = v.width, v.height
+
+    frames = [None for _ in range(v.frames)]
+
+    for index, frame in tqdm(
+        enumerate(container.decode(video=0)),
+        total=1 if probe else v.frames,
+        desc=f"Loading file {path.name}",
+    ):
+        if scale is not None:
+            frame = frame.reformat(width=int(w * scale), height=int(h * scale))
+
+        frame = frame.to_image()
+
+        if grayscale:
+            frame = frame.convert("L")
+
+        frames[index] = ski.util.img_as_ubyte(frame)
+
+    frames = np.array(frames, dtype=np.ubyte)
+    return frames

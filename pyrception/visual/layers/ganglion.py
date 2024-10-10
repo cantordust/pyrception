@@ -1,9 +1,6 @@
 import typing as tp
 
 # --------------------------------------
-import torch as pt
-
-# --------------------------------------
 import numpy as np
 
 # --------------------------------------
@@ -28,7 +25,7 @@ class GanglionLayer(BaseLayer):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
         bipolar: BipolarLayer,
         amacrine: AmacrineLayer,
         sectors: int = 64,
@@ -39,7 +36,7 @@ class GanglionLayer(BaseLayer):
     ):
 
         # Initialise the base
-        super().__init__(size, name)
+        super().__init__(shape, name)
 
         # Initialise the bipolar receptive fields.
         # ==================================================
@@ -49,7 +46,7 @@ class GanglionLayer(BaseLayer):
         bipolar_params.setdefault("name", f"{name} | Bipolar RFs")
         bipolar_params["sectors"] = sectors
         self.bipolar_rfs = ReceptiveFields(
-            self.size,
+            self.shape,
             bipolar.rfs.cell_coordinates,
             **bipolar_params,
         )
@@ -63,7 +60,7 @@ class GanglionLayer(BaseLayer):
         amacrine_params.setdefault("name", f"{name} | Amacrine RFs")
         amacrine_params["sectors"] = sectors
         self.amacrine_rfs = ReceptiveFields(
-            self.size,
+            self.shape,
             amacrine.rfs.cell_coordinates,
             **amacrine_params,
         )
@@ -84,23 +81,23 @@ class GanglionLayer(BaseLayer):
 
         # ON centre / OFF surround
         on_off = self.convolve(
-            self.bipolar_rfs.rfs,
+            self.bipolar_rfs.forward_synapses,
             self.bipolar.on,
         ) - self.inhibition_scale * self.convolve(
-            self.amacrine_rfs.rfs,
+            self.amacrine_rfs.forward_synapses,
             self.amacrine.off,
         )
-        on_off_spikes = pt.where(on_off >= 0, 1, 0)
+        on_off_spikes = np.where(on_off >= 0, 1, 0)
 
         # OFF centre / ON surround
         off_on = self.convolve(
-            self.bipolar_rfs.rfs,
+            self.bipolar_rfs.forward_synapses,
             self.bipolar.off,
         ) - self.inhibition_scale * self.convolve(
-            self.amacrine_rfs.rfs,
+            self.amacrine_rfs.forward_synapses,
             self.amacrine.on,
         )
-        off_on_spikes = pt.where(off_on >= 0, 1, 0)
+        off_on_spikes = np.where(off_on >= 0, 1, 0)
 
         return (on_off_spikes, off_on_spikes)
 

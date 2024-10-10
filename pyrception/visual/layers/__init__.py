@@ -4,13 +4,3 @@ from pyrception.visual.layers.horizontal import HorizontalLayer
 from pyrception.visual.layers.bipolar import BipolarLayer
 from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.ganglion import GanglionLayer
-
-
-__all__ = [
-    "BaseLayer",
-    "ReceptorLayer",
-    "HorizontalLayer",
-    "BipolarLayer",
-    "AmacrineLayer",
-    "GanglionLayer",
-]

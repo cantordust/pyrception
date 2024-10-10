@@ -7,12 +7,13 @@ import numpy as np
 import math
 
 # --------------------------------------
-import torch as pt
+from scipy.sparse import csc_array
 
 # --------------------------------------
 from tqdm import tqdm
 
 # --------------------------------------
+import pyrception.util.functions as pcf
 from pyrception import conf
 from pyrception.logging import Logging
 from pyrception.visual.util.types import RFArrangement
@@ -28,27 +29,26 @@ class ReceptiveFields(Logging):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
-        substrate: pt.Tensor = None,
-        sectors: int = 32,
+        shape: tp.Tuple[int, ...],
+        substrate: np.ndarray = None,
+        sectors: int = 64,
         extent: int = 1.0,
         arrangement: RFArrangement = RFArrangement.LogPolar,
-        fovea_ratio: int = 1.0,
         inverse: bool = False,
         dense: bool = False,
-        compute_factors: bool = False,
+        create_feedback: bool = False,
         name: str = "Receptive fields",
         kernel_params: tp.Dict[str, tp.Any] = None,
     ):
         """
 
         Args:
-            size (tp.Tuple[int, ...]):
+            shape (tp.Tuple[int, ...]):
                 The dimensions of the visual field (height, width, depth).
                 NOTE: Colour vision is not implemented yet.
                 It would be necessary to take into account the depth dimension.
 
-            substrate (pt.Tensor):
+            substrate (np.ndarray):
                 The coordinates of the input cells that constitute the 'substrate' to which
                 the receptive fields are applied. These coordinates could be sparse.
 
@@ -63,11 +63,6 @@ class ReceptiveFields(Logging):
                 Defines how the RFs are arranged spatially to cover the visual field.
                 Defaults to RFArrangement.LogPolar.
 
-            fovea_ratio (int, optional):
-                Ratio of the foveal region relative to the default size computed from the sectors.
-                Defaults to 1.0.
-                WIP This is not fully functional yet.
-
             inverse (bool, optional):
                 Inverse distribution of RF sizes (i.e., RFs are larger in the centre and become
                 smaller with eccentricity). Defaults to False.
@@ -78,7 +73,7 @@ class ReceptiveFields(Logging):
                 NOTE: Use this option with caution, especially for large layers.
                 This may consume *a lot* of memory!
 
-            compute_factors (bool, optional):
+            create_feedback (bool, optional):
                 Toggle indicating if receptive field factors should be computed. Defaults to False.
                 The factors are used to average out the feedback of overlapping receptive fields.
                 Mainly used for (inhibitory) feedback neurons, such as horizontal and amacrine cells.
@@ -100,36 +95,35 @@ class ReceptiveFields(Logging):
             kernel_params = {}
 
         # TODO: add some assertions
-        self.height = int(size[0])
-        self.width = int(size[1])
-        self.depth = int(size[2])
+        self.height = int(shape[0])
+        self.width = int(shape[1])
+        self.depth = int(shape[2])
         self.sector_count = sectors
         self.extent = extent
         self.arrangement = arrangement
-        self.fovea_ratio = fovea_ratio
         self.inverse = inverse
         self.dense = dense
-        self.compute_factors = compute_factors
+        self.create_feedback = create_feedback
         self.kernel_params = KernelParams(**kernel_params)
 
         # Internal parameters used for constructing RFs.
         # ==================================================
         self.neuron_count = 0
         self.substrate = self._make_substrate() if substrate is None else substrate
-        self.rfs = None
+        self.forward_synapses = None
+        self.feedback_synapses = None
         self.rf_rows = None
         self.rf_cols = None
         self.rf_vals = None
-        self.rf_factors = None
         self.rf_sizes = None
-        self.cell_coordinates = None
-        self.cell_rings = None
-        self.cell_sectors = None
         self.cell_rows = None
         self.cell_cols = None
+        self.cell_rings = None
+        self.cell_sectors = None
+        self.cell_coordinates = None
 
     @property
-    def _f_rf_arrangement(self) -> tp.Callable:
+    def _rf_arrangement_dispather(self) -> tp.Callable:
         """
         Return the RF factory function based on the RF arrangement.
 
@@ -155,7 +149,7 @@ class ReceptiveFields(Logging):
         return function
 
     @property
-    def _f_kernel_shape(self) -> tp.Callable:
+    def _kernel_shape_dispather(self) -> tp.Callable:
         """
         Return the kernel factory function based on the kernel shape.
 
@@ -181,7 +175,7 @@ class ReceptiveFields(Logging):
         return function
 
     @property
-    def _f_kernel_filter(self) -> tp.Callable:
+    def _kernel_filter_dispatcher(self) -> tp.Callable:
         """
         Return the kernel factory function based on the kernel filter.
 
@@ -222,25 +216,23 @@ class ReceptiveFields(Logging):
         """
 
         # A mesh of all possible coordinate pairs
-        rows = pt.linspace(0, self.height - 1, self.height // step, dtype=pt.int32)
-        cols = pt.linspace(0, self.width - 1, self.width // step, dtype=pt.int32)
-        return pt.cartesian_prod(rows, cols)
+        rows = np.linspace(0, self.height - 1, self.height // step, dtype=np.int32)
+        cols = np.linspace(0, self.width - 1, self.width // step, dtype=np.int32)
+        return pcf.cartesian_prod(rows, cols)
 
     def _make_elliptic_kernel(
         self,
-        substrate: pt.Tensor,
-        centre: pt.Tensor,
-        spread: pt.Tensor,
+        centre: np.ndarray,
+        spread: np.ndarray,
         angle: float = 0.0,
-    ) -> tp.Tuple[pt.Tensor, ...]:
+        substrate: np.ndarray = None,
+    ) -> tp.Tuple[np.ndarray, ...]:
         """
         Create an elliptic kernel centred at a certain pixel and
         having the specified spread (semi-major axes).
         The kernel can be optionally rotated at an angle.
 
         Args:
-            substrate (pt.Tensor):
-                The coordinate substrate.
 
             centre (np.ndarray):
                 The centre of the ellipse
@@ -253,8 +245,12 @@ class ReceptiveFields(Logging):
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
+            substrate (np.ndarray):
+                Coordinate substrate as an array with a shape of (N, 2).
+                Can be sparse.
+
         Returns:
-            tp.Tuple[pt.Tensor, ...]:
+            tp.Tuple[np.ndarray, ...]:
                 A tuple containing:
                     1. Coordinate columns.
                     2. Coordinate rows.
@@ -277,7 +273,7 @@ class ReceptiveFields(Logging):
         ys = cols * cos + rows * sin
 
         # Extract the indices that fall within the ellipse.
-        k_idx = pt.argwhere((xs / spread[0]) ** 2 + (ys / spread[1]) ** 2 < 1)[:, 0]
+        k_idx = np.argwhere((xs / spread[0]) ** 2 + (ys / spread[1]) ** 2 < 1)[:, 0]
 
         # Extract the coordinates of the kernel from the substrate as row / column pairs.
         coords = substrate[k_idx]
@@ -287,11 +283,11 @@ class ReceptiveFields(Logging):
 
     def _make_rectangular_kernel(
         self,
-        substrate: pt.Tensor,
         centre: np.ndarray,
         spread: np.ndarray,
         angle: float = 0.0,
-    ) -> tp.Tuple[pt.Tensor, ...]:
+        substrate: np.ndarray = None,
+    ) -> tp.Tuple[np.ndarray, ...]:
         """
         Create a rectangular kernel centred at a certain pixel and
         having the specified spread (side lengths).
@@ -300,8 +296,6 @@ class ReceptiveFields(Logging):
         WIP: This is a stub - to be implemented.
 
         Args:
-            substrate (pt.Tensor):
-                The coordinate substrate.
 
             centre (np.ndarray):
                 The centre of the rectangle (the crossing point of its diagonals).
@@ -314,8 +308,12 @@ class ReceptiveFields(Logging):
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
+            substrate (np.ndarray):
+                Coordinate substrate as an array with a shape of (N, 2).
+                Can be sparse.
+
         Returns:
-            tp.Tuple[pt.Tensor, ...]:
+            tp.Tuple[np.ndarray, ...]:
                 A tuple containing:
                     1. Coordinate columns.
                     2. Coordinate rows.
@@ -326,6 +324,10 @@ class ReceptiveFields(Logging):
                 NOTE: The last two are used for computing the kernel weights
                 (for Gaussian and uniform kernels).
         """
+
+        if substrate is None:
+            substrate = self.substrate
+
         # Columns and rows offset to the given centre coordinates.
         rows = substrate[:, 0] - centre[0]
         cols = substrate[:, 1] - centre[1]
@@ -336,12 +338,10 @@ class ReceptiveFields(Logging):
         xs = -cols * sin + rows * cos
         ys = cols * cos + rows * sin
 
-        # Extract the indices that fall within the square.
-        k_idx = pt.argwhere(
-            (xs > -spread[0] / 2)
-            & (xs < spread[0] / 2)
-            & (ys > -spread[1] / 2)
-            & (ys < spread[1] / 2)
+        # Extract the indices that fall within the rectangle.
+        k_idx = np.argwhere(
+            (abs(xs) < spread[0] / 2)
+            & (abs(ys) < spread[1] / 2)
         )[:, 0]
 
         # Extract the coordinates of the kernel from the substrate as row / column pairs.
@@ -352,19 +352,16 @@ class ReceptiveFields(Logging):
 
     def _make_uniform_kernel(
         self,
-        substrate: pt.Tensor,
         centre: tp.Tuple[int, int],
         spread: tp.Tuple[int, int],
         angle: float = 0.0,
-        weights: tp.Union[pt.Tensor, float] = None,
-    ) -> tp.Tuple[pt.Tensor, pt.Tensor]:
+        weights: tp.Union[np.ndarray, float] = None,
+        substrate: np.ndarray = None,
+    ) -> tp.Tuple[np.ndarray, np.ndarray]:
         """
         2D uniform kernel with a given centre, spread and rotation angle.
 
         Args:
-            substrate (pt.Tensor):
-                Coordinate substrate as a tensor with shape (N, 2).
-                Could be sparse.
 
             centre (tp.Tuple[int, float]):
                 Coordinates of the centre of the kernel.
@@ -375,54 +372,55 @@ class ReceptiveFields(Logging):
             angle (float, optional):
                 Rotation angle. Defaults to 0.0.
 
-            weights (tp.Union[pt.Tensor, float], optional):
+            weights (tp.Union[np.ndarray, float], optional):
                 Weights of the kernel. Defaults to None.
                 If provided as a `float`, all kernels will have the same weight.
 
-            shape (str, optional):
-                kernel shape. Defaults to "elliptic".
+            substrate (np.ndarray):
+                Coordinate substrate as an array with a shape of (N, 2).
+                Can be sparse.
 
         Returns:
-            tp.Tuple[pt.Tensor, pt.Tensor]:
+            tp.Tuple[np.ndarray, np.ndarray]:
                 Values and indices of the kernel (suitable for a sparse tensor).
         """
 
+        if substrate is None:
+            substrate = self.substrate
+
         # Get the rows and columns for the kernel
-        (rows, cols, idx, _, _) = self._f_kernel_shape(
-            substrate,
+        (rows, cols, idx, _, _) = self._kernel_shape_dispather(
             centre,
             spread,
             angle,
+            substrate,
         )
 
         # Bail out if the kernel size is 0
-        if cols.numel() == 0:
+        if cols.size == 0:
             return
 
         if weights is None:
-            weights = 1 / cols.numel()
+            weights = 1 / cols.size
 
-        vals = pt.full_like(cols, weights, dtype=pt.float32)
+        vals = np.full_like(cols, weights, dtype=np.float32)
 
         # Return the kernel indices and values
         return (rows, cols, vals, idx)
 
     def _make_gaussian_kernel(
         self,
-        substrate: pt.Tensor,
-        centre: pt.Tensor,
-        spread: pt.Tensor,
+        centre: np.ndarray,
+        spread: np.ndarray,
         angle: float = 0.0,
         sd: tp.Union[tp.Tuple[float, ...], float] = (0.37, 0.37),
         normalise: bool = True,
-    ) -> tp.Tuple[pt.Tensor, pt.Tensor]:
+        substrate: np.ndarray = None,
+    ) -> tp.Tuple[np.ndarray, np.ndarray]:
         """
         2D Gaussian kernel with a given mean, SD and rotation angle.
 
         Args:
-            substrate (pt.Tensor):
-                Coordinate substrate as a tensor with shape (N, 2).
-                Could be sparse.
 
             centre (tp.Tuple[int, float]):
                 Coordinates of the centre of the kernel.
@@ -438,56 +436,60 @@ class ReceptiveFields(Logging):
                 as a percentage of the spread. Defaults to (0.37, 0.37).
                 This is approximately one standard deviation.
 
-            shape (str, optional):
-                Kernel shape. Defaults to "elliptic".
-
             normalise (bool, optional):
                 Toggle for Gaussian normalisation. Defaults to True.
 
+            substrate (np.ndarray):
+                Coordinate substrate as an array with a shape of (N, 2).
+                Can be sparse.
+
         Returns:
-            tp.Tuple[pt.Tensor, pt.Tensor]:
+            tp.Tuple[np.ndarray, np.ndarray]:
                 Values and indices of the kernel (suitable for a sparse tensor).
         """
 
+        if substrate is None:
+            substrate = self.substrate
+
         # Get the rows and columns for the kernel
-        (rows, cols, idx, xs, ys) = self._f_kernel_shape(
-            substrate,
+        (rows, cols, idx, xs, ys) = self._kernel_shape_dispather(
             centre,
             spread,
             angle,
+            substrate,
         )
 
         # Bail out if the kernel size is 0
-        if cols.numel() == 0:
+        if cols.size == 0:
             return
 
         # Compute the standard deviation relative to the spread
         if isinstance(sd, float):
             sd = [sd, sd]
-        sd = pt.tensor(sd, dtype=pt.float32)
+        sd = np.array(sd, dtype=np.float32)
         sd *= spread
 
         # Create a Gaussian distribution
-        vals = pt.exp(-0.5 * ((xs / sd[0]) ** 2 + (ys / sd[1]) ** 2))
+        vals = np.exp(-0.5 * ((xs / sd[0]) ** 2 + (ys / sd[1]) ** 2))
 
         # Normalise if necessary
         if normalise:
-            vals /= 2 * pt.pi * (sd[0] * sd[1])
+            vals /= 2 * np.pi * (sd[0] * sd[1])
 
         # Return the kernel parameters.
         return (rows, cols, vals, idx)
 
     def _make_gabor_kernel(
         self,
-        substrate: pt.Tensor,
-        centre: pt.Tensor,
-        spread: pt.Tensor,
+        centre: np.ndarray,
+        spread: np.ndarray,
         angle: float = 0.0,  # Orientation [deg]
         sd: tp.Union[tp.Tuple[float, ...], float] = (0.37, 0.37),
         frequency: float = 0.1,  # Sine component frequency
         aspect: float = 0.1,  # Aspect ratio
         phase: float = 0.0,  # Phase of the sine component
-    ) -> tp.Tuple[pt.Tensor, pt.Tensor]:
+        substrate: np.ndarray = None,
+    ) -> tp.Tuple[np.ndarray, np.ndarray]:
         """
         Gabor filters.
 
@@ -497,9 +499,6 @@ class ReceptiveFields(Logging):
         the sine funciton.
 
         Args:
-            substrate (pt.Tensor):
-                Coordinate substrate as a tensor with shape (N, 2).
-                Could be sparse.
 
             centre (tp.Tuple[int, float]):
                 Coordinates of the centre of the kernel.
@@ -524,29 +523,35 @@ class ReceptiveFields(Logging):
             phase (float, optional):
                 Sine phase. Defaults to 0.0
 
+            substrate (np.ndarray):
+                Coordinate substrate as an array with a shape of (N, 2).
+                Can be sparse.
+
         Returns:
-            tp.Tuple[pt.Tensor, pt.Tensor]:
+            tp.Tuple[np.ndarray, np.ndarray]:
                 Values and indices of the kernel (suitable for a sparse tensor).
         """
-        pass
 
-    def _trim_to_vf(
+        if substrate is None:
+            substrate = self.substrate
+
+    def _crop_to_vf(
         self,
-        coordinates: pt.Tensor,
-    ) -> tp.Tuple[pt.Tensor, ...]:
+        coordinates: np.ndarray,
+    ) -> tp.Tuple[np.ndarray, ...]:
         """
         Trim the coordinates of the receptive fields to the
         dimensions of the visual field.
 
         Args:
-            coordinates (pt.Tensor):
+            coordinates (np.ndarray):
                 Pixel coordinates of the receptive field.
 
         Returns:
-            tp.Tuple[pt.Tensor, ...]:
+            tp.Tuple[np.ndarray, ...]:
                 A tuple containing:
                     1. The trimmed coordinates.
-                    2. The mask that trims the coordinates to the visual field
+                    2. The mask that trims the coordinates to the visual field.
                     3. An index array for the subset of unique coordinates
                         (since some coordinates might be repeated).
         """
@@ -559,25 +564,19 @@ class ReceptiveFields(Logging):
             & (coordinates[:, 1] < self.width)
         )
 
-        # REVIEW
-        # This is a hack since the PyTorch version of
-        # unique() does not return the unique indices
-        # like NumPy does.
-        #
-        # Rework once this is implemented in PyTorch.
-        # Cf. https://github.com/pytorch/pytorch/issues/36748
+        # Return unique indices.
         # ==================================================
         coordinates = coordinates[vf_mask]
 
-        unique_indices = pt.tensor(
+        unique_indices = np.array(
             sorted(
                 np.unique(
-                    coordinates.numpy(),
+                    coordinates,
                     return_index=True,
                     axis=0,
                 )[1]
             ),
-            dtype=pt.int32,
+            dtype=np.int32,
         )
 
         return (coordinates[unique_indices], vf_mask, unique_indices)
@@ -585,7 +584,7 @@ class ReceptiveFields(Logging):
     def _extract_segment_indices(
         self,
         container: tp.Iterable,
-    ) -> tp.List[pt.Tensor]:
+    ) -> tp.List[np.ndarray]:
         """
         Extract the indices of a specific segment.
         For now, this is limited to rings and sectors,
@@ -602,7 +601,7 @@ class ReceptiveFields(Logging):
                 portion of the container.
 
         Returns:
-            tp.List[pt.Tensor]:
+            tp.List[np.ndarray]:
                 The indices of the coordinates of the segment.
         """
 
@@ -611,7 +610,7 @@ class ReceptiveFields(Logging):
         cur_item = -1.0
         for idx, (item, index) in enumerate(container):
             if item < cur_item:
-                segments.append(pt.tensor(segment, dtype=pt.int32))
+                segments.append(np.array(segment, dtype=np.int32))
                 segment = [index]
                 cur_item = -1.0
             else:
@@ -619,23 +618,23 @@ class ReceptiveFields(Logging):
                 cur_item = item
 
             if idx == len(container) - 1 and len(segment) > 0:
-                segments.append(pt.tensor(segment, dtype=pt.int32))
+                segments.append(np.array(segment, dtype=np.int32))
 
         return segments
 
     def _segment(
         self,
-        logpolar: pt.Tensor,
-        mask: pt.Tensor,
-        indices: pt.Tensor,
+        logpolar: np.ndarray,
+        mask: np.ndarray,
+        indices: np.ndarray,
     ):
 
         # Mask and index the logpolar coordinates
         # and convert them into a NumPy array.
         # This would be convenient later for computing
         # the sectors.
-        logpolar = logpolar[mask][indices].numpy()
-        indices = pt.arange(logpolar.shape[0])
+        logpolar = logpolar[mask][indices]
+        indices = np.arange(logpolar.shape[0])
 
         # Extract the coordinates of each ring.
         # The logpolar coordinates are sorted by angle,
@@ -659,8 +658,8 @@ class ReceptiveFields(Logging):
     def _compute_sparse_coordinates(
         self,
         rho_max: int,
-        rho_fovea: int,
-    ) -> tp.Tuple[pt.Tensor, int]:
+        eps: float = 1e-8,
+    ) -> tp.Tuple[np.ndarray, int]:
         """
         Create the sparse coordinates for the receptive fields.
 
@@ -677,18 +676,13 @@ class ReceptiveFields(Logging):
         Args:
 
             rho_max (int):
-                Maximal size of any receptive field.
+                The maximal radial offset of a cell relative to the centre of the visual field.
 
-            rho_fovea (int):
-                Maximal size of a receptive field in the fovea.
-                This should be 1 by default, but it can be overridden,
-                for instance, for horizontal cells, which compute the
-                local (spatial) mean illumination for the adjacent receptors.
-                These should ideally encompass multiple receptors, otherwise
-                the spatial mean illumination would make no sense.
+            eps (float):
+                A small constant used to prevent division by 0 or taking a log of 0.
 
         Returns:
-            tp.Tuple[pt.Tensor, int]:
+            tp.Tuple[np.ndarray, int]:
                 A tuple containing:
                     1. The sparse coordinates of the receptive fields.
                     2. The maximal size of the receptive fields.
@@ -697,70 +691,73 @@ class ReceptiveFields(Logging):
         h2 = self.height // 2
         w2 = self.width // 2
 
+        # Size of the foveal region
+        rho_fovea = math.log(rho_max)
+
         # Number of sectors.
         #
         # NOTE
-        # Ideally, this should be divisible by 4 because
-        # then the distribution is nicely symmetric with
-        # respect to the x and y axes.
+        # Ideally, this should be divisible by 2 because
+        # then the receptive field distribution is symmetric
+        # and tends to cover the entire visual field.
         #
         # TODO
         # Figure out if we should actually *enforce* that
-        # the sectors be divisible by 4.
+        # the sectors be divisible by 2.
         # ==================================================
         S = self.sector_count
 
         # Sector size.
-        q = S / (2 * pt.pi)
+        q = S / (2 * np.pi)
 
         # Growth factor for coupling S with R below.
         # This preserves the pixel aspect ratio.
         a = 1 + 1 / q
 
         # Number of radial rings (coupled with the number of sectors)
-        log_a = math.log(a)
-        R = math.floor(math.log(rho_max / rho_fovea) / log_a)
+        log_a = np.log(a)
+        R = np.floor(np.log(rho_max / rho_fovea) / log_a)
 
         # Cartesian coordinate mesh (x, y)
-        rf_rows = pt.arange(self.height) - h2
-        rf_cols = pt.arange(self.width) - w2
-        cart_prod = pt.cartesian_prod(rf_rows, rf_cols)
+        rf_rows = np.arange(self.height) - h2
+        rf_cols = np.arange(self.width) - w2
+        cart_prod = pcf.cartesian_prod(rf_rows, rf_cols)
         (Rs, Cs) = cart_prod[:, 0], cart_prod[:, 1]
 
         # Logpolar coordinate mesh (r, φ)
-        radii = pt.sqrt(Rs**2 + Cs**2)
-        radial_ratios = Rs / radii
-        angles = pt.arccos(radial_ratios)
-        angles = pt.where(Cs > 0, 2 * pt.pi - angles, angles)
+        radii = np.sqrt(Rs**2 + Cs**2)
+        radial_ratios = Rs / (radii + eps)
+        angles = np.arccos(radial_ratios)
+        angles = np.where(Cs > 0, 2 * np.pi - angles, angles)
 
         # Eccentricity-dependent logpolar coordinates of the cells
         # ξ: Radius
         # η: Angle
-        ksi = pt.log(radii / rho_fovea) / log_a
+        ksi = np.log(eps + radii / rho_fovea) / log_a
         eta = q * angles
 
         # Floored versions of ξ and η (mappable to pixel coordinates)
-        u = pt.floor(ksi)
-        v = pt.floor(eta)
+        u = np.round(ksi)
+        v = np.round(eta)
 
         # Mesh of discrete logpolar coordinates of the RF centres
         # Rs: Radii
         # Ts: Angles
-        rf_radii = pt.unique(rho_fovea * (a**u))
-        rf_angles = pt.unique(v / q)
+        rf_radii = np.unique(rho_fovea * (a**u))
+        rf_angles = np.unique(v / q)
 
-        polar_cart_prod = pt.cartesian_prod(rf_radii, rf_angles)
+        polar_cart_prod = pcf.cartesian_prod(rf_radii, rf_angles)
         (Rs, Ts) = polar_cart_prod[:, 0], polar_cart_prod[:, 1]
 
         # Convert Rs and Ts back to integer (x, y) coordinates
-        rf_rows = (pt.round(pt.sin(Ts) * Rs) + h2).type(pt.int32)
-        rf_cols = (pt.round(pt.cos(Ts) * Rs) + w2).type(pt.int32)
+        rf_rows = (np.round(np.sin(Ts) * Rs) + h2).astype(np.int32)
+        rf_cols = (np.round(np.cos(Ts) * Rs) + w2).astype(np.int32)
 
         # Create the (x, y) coordinates
-        coords = pt.stack((rf_rows, rf_cols), dim=1)
+        coords = np.stack((rf_rows, rf_cols), axis=1)
 
-        # Trim coordinates that fall outside the image boundaries
-        (coords, mask, indices) = self._trim_to_vf(coords)
+        # Prune coordinates that fall outside the image boundaries
+        (coords, mask, indices) = self._crop_to_vf(coords)
 
         # Segment the coordinates into rings and sectors
         self._segment(polar_cart_prod, mask, indices)
@@ -770,7 +767,7 @@ class ReceptiveFields(Logging):
         if self.inverse:
             # TODO
             # This needs to be changed.
-            # Right now, it's the same as the else branch,
+            # Right now, it's the same as the else branch.
             max_rf_size = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
         else:
             max_rf_size = (rho_fovea / rho_max) * (a**R) * (1 - 1 / a)
@@ -800,19 +797,12 @@ class ReceptiveFields(Logging):
         # rings from the centre of the FoV
         rho_max = math.sqrt(h2**2 + w2**2)
 
-        # Size of the foveal region
-        rho_fovea = (
-            math.log(rho_max)
-            if self.fovea_ratio is None
-            else rho_max * self.fovea_ratio
-        )
-
         # Compute the coordinates and the RF size ratio
         if self.dense:
             # TODO: Design a proper dense version
-            (coords, max_rf_size) = self._compute_sparse_coordinates(rho_max, rho_fovea)
+            (coords, max_rf_size) = self._compute_sparse_coordinates(rho_max)
         else:
-            (coords, max_rf_size) = self._compute_sparse_coordinates(rho_max, rho_fovea)
+            (coords, max_rf_size) = self._compute_sparse_coordinates(rho_max)
 
         # Make the receptive fields.
         # ==================================================
@@ -830,7 +820,7 @@ class ReceptiveFields(Logging):
         self.extent *= rho_max
 
         # Distances from the central pixel.
-        distances = pt.sqrt((coords[:, 0] - h2) ** 2 + (coords[:, 1] - w2) ** 2)
+        distances = np.sqrt((coords[:, 0] - h2) ** 2 + (coords[:, 1] - w2) ** 2)
 
         for rf_centre, distance in tqdm(
             zip(coords, distances),
@@ -852,7 +842,7 @@ class ReceptiveFields(Logging):
             else:
                 rf_size = self.kernel_params.scale * max_rf_size * distance
 
-            rf_size = pt.tensor([rf_size, rf_size])
+            rf_size = np.array([rf_size, rf_size])
 
             # RF spread.
             # The spread is assumed to represent the full size
@@ -861,77 +851,73 @@ class ReceptiveFields(Logging):
             # We have to scale and then halve it to make sure
             # that the RF factories work as expected.
             # ==================================================
-            rf_spread = pt.max(
-                pt.vstack((rf_size, self.kernel_params.min_size)), dim=0
+            rf_spread = np.max(
+                np.vstack((rf_size, self.kernel_params.min_size)), axis=0
             )[0]
             rf_spread *= self.kernel_params.scale * self.kernel_params.aspect
 
+            # print(
+            #     f"==[ rf_centre: {rf_centre} | distance: {distance} | rf_size: {rf_size} | rf_spread: {rf_spread}"
+            # )
+
             # Create the RF
             # ==================================================
-            result = self._f_kernel_filter(
-                self.substrate,
-                rf_centre,  # Centre
-                rf_spread,
+            result = self._kernel_filter_dispatcher(
+                rf_centre,  # Centre of the receptive field
+                rf_spread,  # E.g., diameter in the case of a circle
                 **self.kernel_params.params,  # Additional RF parameters
             )
 
-            # Process the results
+            # Sanity check
+            if result is None:
+                continue
+
+            # Unpack and process the result
             # ==================================================
-            if result is not None:
-                # Unpack the result
-                (rf_rows, rf_cols, rf_vals, rf_idx) = result
+            (rf_rows, rf_cols, rf_vals, rf_idx) = result
 
-                # Update the rows, columns and values
-                rows.append(rf_rows)
-                cols.append(rf_cols)
-                # indices.append(pt.full_like(k_rows, len(indices)))
-                sparse_rows.append(pt.full_like(rf_idx, len(sparse_rows)))
-                sparse_cols.append(rf_idx)
-                sparse_vals.append(rf_vals)
+            # Update the rows, columns and values
+            rows.append(rf_rows)
+            cols.append(rf_cols)
+            sparse_rows.append(np.full_like(rf_idx, len(sparse_rows)))
+            sparse_cols.append(rf_idx)
+            sparse_vals.append(rf_vals)
 
-                # Store the coordinates of the cell itself.
-                # It should be in the centre of the receptive field.
-                cell_coordinates.append(rf_centre)
+            # Store the coordinates of the cell itself.
+            # It should be in the centre of the receptive field.
+            cell_coordinates.append(rf_centre)
 
-                # Store the size of the RF of the cell
-                rf_sizes.append(rf_size)
-                neuron_count += 1
+            # Store the size of the RF of the cell
+            rf_sizes.append(rf_size)
+            neuron_count += 1
 
         # Prepare the indices and the values of
         # the sparse tensor
         # ==================================================
-        sparse_rows = pt.concatenate(sparse_rows)
-        sparse_cols = pt.concatenate(sparse_cols)
-        sparse_vals = pt.concatenate(sparse_vals)
-
-        sparse_indices = pt.vstack(
-            [
-                sparse_rows,
-                sparse_cols,
-            ]
-        )
+        sparse_rows = np.concatenate(sparse_rows)
+        sparse_cols = np.concatenate(sparse_cols)
+        sparse_vals = np.concatenate(sparse_vals)
 
         # Create the actual receptive fields
         # ==================================================
-        self.rfs = (
-            pt.sparse_coo_tensor(
-                sparse_indices,
+        self.forward_synapses = csc_array(
+            (
                 sparse_vals,
-                # Size of the dense tensor, necessary for correct multiplication
-                size=(
-                    neuron_count,  # rows
-                    len(self.substrate),  # columns
-                ),
-                dtype=conf.dtype,
-            )
-            .coalesce()
-            .to_sparse_csc()
-            .to(conf.device)
+                (sparse_rows, sparse_cols),
+            ),
+            # Size of the dense tensor, necessary for correct multiplication
+            shape=(
+                neuron_count,  # rows
+                len(self.substrate),  # columns
+            ),
+            dtype=conf.dtype,
         )
 
-        self.debug(f"RF sparsity: {100 * self.rfs._nnz() / np.prod(self.rfs.shape):3.4}%")
+        self.debug(
+            f"RF sparsity: {100 * self.forward_synapses.nnz / np.prod(self.forward_synapses.shape):3.4}%"
+        )
 
-        # Store various useful tensors and scalars.
+        # Store various useful arrays and scalars.
         #
         # NOTE
         # These might be redundant, but for now they
@@ -940,13 +926,13 @@ class ReceptiveFields(Logging):
         self.rf_rows = rows
         self.rf_cols = cols
         self.rf_vals = sparse_vals
-        self.cell_coordinates = pt.vstack(cell_coordinates)
-        self.rf_sizes = pt.vstack(rf_sizes)
+        self.cell_coordinates = np.vstack(cell_coordinates)
+        self.rf_sizes = np.vstack(rf_sizes)
         self.neuron_count = neuron_count
-        self.rf_coords = pt.vstack(
+        self.rf_coords = np.vstack(
             (
-                pt.concatenate(rows),
-                pt.concatenate(cols),
+                np.concatenate(rows),
+                np.concatenate(cols),
             )
         )
 
@@ -954,21 +940,41 @@ class ReceptiveFields(Logging):
         # This is necessary for handling overlapping RFs,
         # for instance, in the case of horizontal cells.
         # ==================================================
-        if self.compute_factors:
-            (unique_rf_coords, occurrences) = self.rf_coords.unique(
-                return_counts=True, dim=1
+        if self.create_feedback:
+            (unique_rf_coords, occurrences) = np.unique(
+                self.rf_coords,
+                return_counts=True,
+                axis=1,
             )
-            rf_factors = pt.ones(
-                (self.height, self.width),
-                dtype=conf.dtype,
-                device=conf.device,
-            )
+            rf_dict = {
+                tuple(coord): 1 / occ
+                for (coord, occ) in zip(unique_rf_coords.T, occurrences)
+            }
 
-            rf_factors[
-                unique_rf_coords[0],
-                unique_rf_coords[1],
-            ] = occurrences.type(conf.dtype)
-            self.rf_factors = (1 / rf_factors).flatten()
+            # Swap the sparse rows and columns in order to
+            # emulate feedback connections.
+            # ==================================================
+            fb_sparse_rows = np.array(sparse_cols)
+            fb_sparse_cols = np.array(sparse_rows)
+            fb_sparse_vals = []
+            for rf_rows, rf_cols in zip(rows, cols):
+                fb_sparse_vals.extend(
+                    [rf_dict[(row, col)] for row, col in zip(rf_rows, rf_cols)]
+                )
+
+            # Feedback synapses
+            self.feedback_synapses = csc_array(
+                (
+                    fb_sparse_vals,
+                    (fb_sparse_rows, fb_sparse_cols),
+                ),
+                # Size of the dense tensor, necessary for correct multiplication
+                shape=(
+                    len(self.substrate),  # rows
+                    neuron_count,  # columns
+                ),
+                dtype=conf.dtype,
+            )
 
         self.debug(f"Receptive fields created for {self.neuron_count} neurons.")
 
@@ -979,4 +985,4 @@ class ReceptiveFields(Logging):
         pass
 
     def make_rfs(self, *args, **kwargs):
-        return self._f_rf_arrangement(*args, **kwargs)
+        return self._rf_arrangement_dispather(*args, **kwargs)

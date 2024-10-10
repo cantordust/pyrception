@@ -1,7 +1,8 @@
+# --------------------------------------
 import typing as tp
 
 # --------------------------------------
-import torch as pt
+import numpy as np
 
 # --------------------------------------
 from pyrception.visual.layers.base import BaseLayer
@@ -13,7 +14,7 @@ class AmacrineLayer(BaseLayer):
 
     def __init__(
         self,
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
         bipolar: BipolarLayer,
         sectors: int = 32,
         name: str = "Amacrine",
@@ -21,7 +22,7 @@ class AmacrineLayer(BaseLayer):
     ):
 
         # Initialise the base
-        super().__init__(size, name)
+        super().__init__(shape, name)
 
         # Store the bipolar layer
         self.bipolar = bipolar
@@ -31,7 +32,7 @@ class AmacrineLayer(BaseLayer):
             rf_params = {}
         rf_params.setdefault("name", f"{name} | Amacrine RFs")
         self.rfs = ReceptiveFields(
-            self.size,
+            self.shape,
             bipolar.rfs.cell_coordinates,
             sectors,
             **rf_params,
@@ -39,16 +40,16 @@ class AmacrineLayer(BaseLayer):
         self.rfs.make_rfs()
 
         # Activations for the ON and OFF pathways
-        self.on = pt.zeros((self.rfs.neuron_count,))
-        self.off = pt.zeros_like(self.on)
+        self.on = np.zeros((self.rfs.neuron_count,))
+        self.off = np.zeros_like(self.on)
 
         self.info("Initialised.")
 
     def forward(self):
 
         # Compute the activation of the amacrine cells
-        self.on = self.convolve(self.rfs.rfs, self.bipolar.on)
-        self.off = self.convolve(self.rfs.rfs, self.bipolar.off)
+        self.on = self.convolve(self.rfs.forward_synapses, self.bipolar.on)
+        self.off = self.convolve(self.rfs.forward_synapses, self.bipolar.off)
 
         return (self.on, self.off)
 

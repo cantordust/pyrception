@@ -7,15 +7,13 @@ from pathlib import Path
 import numpy as np
 
 # --------------------------------------
-import torch as pt
-
-# --------------------------------------
 import imageio.v3 as iio
 
 # --------------------------------------
 import cv2 as cv
 
 # --------------------------------------
+from pyrception import conf
 from pyrception.logging import Logging
 from pyrception.visual.util.types import Dim
 from pyrception.visual.util.types import Dims
@@ -35,7 +33,8 @@ class Retina(Logging):
     def __init__(
         self,
         source: tp.Union[str, int],
-        size: tp.Tuple[int, ...],
+        shape: tp.Tuple[int, ...],
+        saccades: bool = False,
         name: str = "Retina",
         *args,
         **kwargs,
@@ -47,8 +46,8 @@ class Retina(Logging):
             source (tp.Union[str, int]):
                 Input source.
 
-            size (tp.Tuple[int, ...]):
-                Size of the visual field.
+            shape (tp.Tuple[int, ...]):
+                Dimensions of the visual field.
 
             saccades (bool, optional):
                 Toggle for saccadic movements. Defaults to False.
@@ -72,12 +71,13 @@ class Retina(Logging):
         # Source parameters
         # ==================================================
         self.source = source
+        self.shape = shape
+        self.saccades = saccades
         self.src_path = None
         self.stream = None
         self.reader = None
-        self.processing = (
-            True  # Flag indicating whether the source is still being processed
-        )
+        #: Flag indicating whether the source is still being processed
+        self.processing = True
         self.frame_path = None
         self.video_path = None
         self.frame = None
@@ -86,31 +86,31 @@ class Retina(Logging):
 
         # Receptor layer
         # ==================================================
-        receptor_args = kwargs.get("receptor", {})
-        self.receptor = ReceptorLayer(size, **receptor_args)
+        receptor_args = kwargs.get("receptor_layer", {})
+        self.receptor = ReceptorLayer(shape, **receptor_args)
 
         # Horizontal layer
         # ==================================================
-        horizontal_args = kwargs.get("horizontal", {})
-        self.horizontal = HorizontalLayer(size, self.receptor, **horizontal_args)
+        horizontal_args = kwargs.get("horizontal_layer", {})
+        self.horizontal = HorizontalLayer(shape, self.receptor, **horizontal_args)
 
         # Bipolar layer
         # ==================================================
-        bipolar_args = kwargs.get("bipolar", {})
+        bipolar_args = kwargs.get("bipolar_layer", {})
         self.bipolar = BipolarLayer(
-            size, self.receptor, self.horizontal, **bipolar_args
+            shape, self.receptor, self.horizontal, **bipolar_args
         )
 
         # Amacrine layer
         # ==================================================
-        amacrine_args = kwargs.get("amacrine", {})
-        self.amacrine = AmacrineLayer(size, self.bipolar, **amacrine_args)
+        amacrine_args = kwargs.get("amacrine_layer", {})
+        self.amacrine = AmacrineLayer(shape, self.bipolar, **amacrine_args)
 
         # Ganglion layer
         # ==================================================
-        ganglion_args = kwargs.get("ganglion", {})
+        ganglion_args = kwargs.get("ganglion_layer", {})
         self.ganglion = GanglionLayer(
-            size, self.bipolar, self.amacrine, **ganglion_args
+            shape, self.bipolar, self.amacrine, **ganglion_args
         )
 
         self.info("Initialised.")
@@ -225,7 +225,7 @@ class Retina(Logging):
                 interpolation=cv.INTER_AREA,
             )
 
-        self.frame = pt.from_numpy(self.frame).float()
+        self.frame = self.frame.astype(conf.dtype)
 
         return self.frame
 
