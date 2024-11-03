@@ -1,13 +1,13 @@
 # # from pyrception.version import version
 # # from pyrception.scan.layer import Layer
 # # from pyrception.scan.stack import Stack
-# from pyrception.gui.display.dock import Dock
-# # from pyrception.gui.display.thumbnail import Thumbnail
-# from pyrception.gui.display.image import ImageView
-# from pyrception.gui.display.canvas import Canvas
-# # from pyrception.gui.display.plot import Plot
-# from pyrception.gui.display.splitview import SplitView
-# from pyrception.gui.display.tab import Tab
+# from pyrception.gui.core.dock import Dock
+# # from pyrception.gui.core.thumbnail import Thumbnail
+# from pyrception.gui.core.image import ImageView
+# from pyrception.gui.core.canvas import Canvas
+# # from pyrception.gui.core.plot import Plot
+# from pyrception.gui.core.splitview import SplitView
+# from pyrception.gui.core.tab import Tab
 
 # # __all__ = [
 # #     # "Thumbnail",

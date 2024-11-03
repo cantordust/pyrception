@@ -1,17 +1,15 @@
+# --------------------------------------
 import typing as tp
 
 # --------------------------------------
 from PySide6.QtCore import Qt
 from PySide6.QtCore import Slot
 from PySide6.QtCore import Signal
-from PySide6.QtCore import QEvent
+from PySide6.QtCore import QThread
 from PySide6.QtCore import QObject
-
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtGui import QMouseEvent
 from PySide6.QtGui import QEnterEvent
 from PySide6.QtGui import QTransform
-
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
@@ -25,33 +23,34 @@ import numpy as np
 import skimage as ski
 
 # --------------------------------------
-import pyqtgraph as pg
-from pyqtgraph.GraphicsScene.mouseEvents import MouseClickEvent
-from pyqtgraph import SignalProxy
-from pyqtgraph.parametertree import ParameterTree
 from pyqtgraph.parametertree import Parameter
 
 # --------------------------------------
-# from pyrception.gui import Thumbnail
+from pyrception.conf import logger
+from pyrception.utils.functions import thread_id
 from pyrception.gui.param import factory as pf
-from pyrception.gui.display.image import ImageView
+from pyrception.gui.core.image import ImageView
+from pyrception.gui.core.worker import Worker
+from pyrception.visual.layers import ReceptorLayer
+from pyrception.visual.layers import HorizontalLayer
+from pyrception.visual.layers import BipolarLayer
+from pyrception.visual.layers import AmacrineLayer
+from pyrception.visual.layers import GanglionLayer
 
 # from pyrception.gui import Layer
 # from pyrception.gui import Stack
 # from pyrception.gui.conf import conf
-# from pyrception.gui.display.roi.contour import Contour
-# from pyrception.gui.display.roi.target import Target
-
-from pyrception.visual.layers import ReceptorLayer
-from pyrception.visual.layers import HorizontalLayer
-from pyrception.visual.layers import BipolarLayer
+# from pyrception.gui.core.roi.contour import Contour
+# from pyrception.gui.core.roi.target import Target
 
 
 class Canvas(QWidget):
     plot = Signal()
     highlight_plot = Signal(int)
-    update_radial_plot = Signal(float)
-    update_phase_plot = Signal(float)
+    # update_radial_plot = Signal(float)
+    # update_phase_plot = Signal(float)
+    update_status = Signal(str, int)
+    start_worker = Signal()
 
     class EventHandler(QObject):
 
@@ -82,9 +81,6 @@ class Canvas(QWidget):
     ):
         super().__init__(*args, **kwargs)
 
-        # Slots, signals and proxies
-        # ==================================================
-
         # Mouse tracking for the ROI
         # ==================================================
         self.mouse_tracking_toggle = False
@@ -103,6 +99,14 @@ class Canvas(QWidget):
         # ==================================================
         self.frames = frames
 
+        # Thread for preventing the GUI from blocking
+        # ==================================================
+        self._thread = QThread()
+        self._worker = Worker()
+        self.start_worker.connect(self._worker.run)
+        self._worker.moveToThread(self._thread)
+        self._thread.start()
+
         # Image viewport
         # ==================================================
         self.ivs = {}
@@ -113,6 +117,8 @@ class Canvas(QWidget):
             self.ivs["horizontal"] = ImageView(np.zeros_like(self.frames))
             self.ivs["normalised"] = ImageView(np.zeros_like(self.frames))
             self.ivs["bipolar"] = ImageView(np.zeros_like(self.frames))
+            self.ivs["amacrine"] = ImageView(np.zeros_like(self.frames))
+            self.ivs["ganglion"] = ImageView(np.zeros_like(self.frames))
 
         # Layout grid
         # ==================================================
@@ -123,6 +129,8 @@ class Canvas(QWidget):
         self.grid.addWidget(self.ivs["horizontal"], 0, 2, 1, 1)
         self.grid.addWidget(self.ivs["normalised"], 1, 0, 1, 1)
         self.grid.addWidget(self.ivs["bipolar"], 1, 1, 1, 1)
+        self.grid.addWidget(self.ivs["amacrine"], 2, 0, 1, 1)
+        self.grid.addWidget(self.ivs["ganglion"], 2, 1, 1, 1)
 
         # Layers
         # ==================================================
@@ -140,6 +148,31 @@ class Canvas(QWidget):
         # self.tb_layout = QHBoxLayout()
         # self.tb_layout.setContentsMargins(0, 0, 0, 0)
         # self.tb_widget.setLayout(self.tb_layout)
+
+    def __del__(self):
+
+        print(f"Quitting thread...")
+        # if self._thread.isRunning():
+        #     self._thread.quit()
+        #     while self._thread.isRunning():
+        #         time.sleep(0.1)
+        #         print(f"Quitting thread...")
+
+    def _auto_range(
+        self,
+        iviews: tp.List[ImageView],
+    ):
+        for iview in iviews:
+            iview.autoRange()
+
+    def invalidate(self):
+        """
+        A method that invalidates the current layers.
+
+        This forces all layers to be recreated.
+        """
+        for iview in self.ivs:
+            logger.info
 
     # @property
     # def layer(self) -> Layer:
@@ -299,56 +332,152 @@ class Canvas(QWidget):
         self,
         scale: float,
     ):
-        tr = QTransform()  # prepare ImageItem transformation:
-        tr.scale(scale, scale)  # scale horizontal and vertical axes
+
+        tr = QTransform()
+        tr.scale(scale, scale)
         self.ivs["original"].imageItem.setTransform(tr)
 
-    def add_horizontal(self):
+    def _update_status(
+        self,
+        message: str = "Ready",
+        value: int = 0,
+    ):
+        self.update_status.emit(message, value)
+
+    def add_receptor(
+        self,
+        shape: tp.Tuple,
+        **params,
+    ):
+
+        logger.info(f"[ {thread_id()} ] Creating receptor layer...")
+
+        self._update_status("Creating receptor layer...")
+
+        self.receptor = ReceptorLayer(
+            shape,
+            notifier=self._update_status,
+            **params,
+        )
+
+        self._update_status("Creating receptor layer...done!")
+
+    def add_horizontal(
+        self,
+        shape: tp.Tuple,
+        **params,
+    ):
+
+        logger.info(f"[ {thread_id()} ] Creating horizontal layer...")
+        self._update_status("Creating horizontal layer...")
+
+        self.horizontal = HorizontalLayer(
+            shape,
+            self.receptor,
+            notifier=self._update_status,
+            **params,
+        )
 
         (_, _, _, canvas) = self.horizontal.plot_rfs()
 
-        canvas = ski.util.img_as_ubyte(canvas)
+        # canvas = ski.util.img_as_ubyte(canvas)
 
         self.ivs["horizontal"].setImage(canvas)
         self.ivs["horizontal"].autoRange()
+        self._update_status("Creating horizontal layer...done!")
 
-    def add_bipolar(self):
+    def add_bipolar(
+        self,
+        shape: tp.Tuple,
+        **params,
+    ):
+
+        self._update_status("Creating bipolar layer...")
+        self.bipolar = BipolarLayer(
+            shape,
+            self.receptor,
+            self.horizontal,
+            notifier=self._update_status,
+            **params,
+        )
 
         (_, _, _, canvas) = self.bipolar.plot_rfs()
 
-        canvas = ski.util.img_as_ubyte(canvas)
+        # canvas = ski.util.img_as_ubyte(canvas)
 
         self.ivs["bipolar"].setImage(canvas)
         self.ivs["bipolar"].autoRange()
+        self._update_status("Creating bipolar layer...done!")
+
+    def add_amacrine(
+        self,
+        shape: tp.Tuple,
+        **params,
+    ):
+
+        self._update_status("Creating amacrine layer...")
+        self.amacrine = AmacrineLayer(
+            shape,
+            self.bipolar,
+            notifier=self._update_status,
+            **params,
+        )
+
+        (_, _, _, canvas) = self.amacrine.plot_rfs()
+
+        # canvas = ski.util.img_as_ubyte(canvas)
+
+        self.ivs["amacrine"].setImage(canvas)
+        self.ivs["amacrine"].autoRange()
+        self._update_status("Creating amacrine layer...done!")
+
+    def add_ganglion(
+        self,
+        shape: tp.Tuple,
+        **params,
+    ):
+
+        self._update_status("Creating ganglion layer...")
+        self.ganglion = GanglionLayer(
+            shape,
+            self.bipolar,
+            self.amacrine,
+            notifier=self._update_status,
+            **params,
+        )
+
+        (_, _, _, canvas) = self.ganglion.plot_rfs()
+
+        # canvas = ski.util.img_as_ubyte(canvas)
+
+        self.ivs["ganglion"].setImage(canvas)
+        self.ivs["ganglion"].autoRange()
+        self._update_status("Creating ganglion layer...done!")
 
     @Slot(Parameter)
-    def make_layers(
+    def create_layers(
         self,
         root: Parameter,
     ):
 
         params = pf.to_dict(root)
-
-        shape = np.array(self.frames[0].shape)
-
-        self.receptor = ReceptorLayer(
-            shape,
-            **params["receptor_layer"],
+        shape = (
+            np.array(
+                [
+                    params["input"]["height"],
+                    params["input"]["width"],
+                ]
+            )
         )
-        self.horizontal = HorizontalLayer(
-            shape,
-            self.receptor,
-            **params["horizontal_layer"],
-        )
-        self.add_horizontal()
 
-        self.bipolar = BipolarLayer(
-            shape,
-            self.receptor,
-            self.horizontal,
-            **params["bipolar_layer"],
-        )
-        self.add_bipolar()
+        self._worker.clear()
+        self._worker.bind(self.add_receptor, shape, **params["receptor_layer"])
+        self._worker.bind(self.add_horizontal, shape, **params["horizontal_layer"])
+        self._worker.bind(self.add_bipolar, shape, **params["bipolar_layer"])
+        self._worker.bind(self.add_amacrine, shape, **params["amacrine_layer"])
+        self._worker.bind(self.add_ganglion, shape, **params["ganglion_layer"])
+        self._worker.bind(self._update_status)
+        self.start_worker.emit()
 
     # def eventFilter(self, obj, event):
     #     if obj is self.window:

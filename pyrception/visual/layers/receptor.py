@@ -1,3 +1,4 @@
+# --------------------------------------
 import typing as tp
 
 # --------------------------------------
@@ -35,10 +36,11 @@ class ReceptorLayer(BaseLayer):
         saccades: bool = False,
         greyscale: bool = True,
         name: str = "Receptor",
+        notifier: tp.Callable = None,
     ):
 
         # Initialise the base
-        super().__init__(shape, name)
+        super().__init__(shape, name, notifier)
 
         self.saccades = saccades
         # TODO: Connect this to the dimensionality of the input.
@@ -55,6 +57,7 @@ class ReceptorLayer(BaseLayer):
         self.rfs = ReceptiveFields(
             self.shape,
             name=f"{name} RFs",
+            notifier=notifier,
         )
 
         # Receptor activation

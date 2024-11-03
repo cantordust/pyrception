@@ -8,13 +8,17 @@ from matplotlib.colors import to_rgba
 import numpy as np
 
 # --------------------------------------
-from pyrception.logging import Logging
-from pyrception.util import functions as pf
+import skimage as ski
+
+# --------------------------------------
+from pyrception.utils import functions as pf
+from pyrception.utils.logging import Logger
 from pyrception.visual import ReceptiveFields
-from pyrception.visual.util.types import ImagePlot
+from pyrception.visual.utils.types import ImagePlot
+from pyrception.visual.utils.types import KernelFilter
 
 
-class BaseLayer(Logging):
+class BaseLayer(Logger):
     """
     Simple layer implementing some basic methods used by all retinal layers.
     """
@@ -23,8 +27,9 @@ class BaseLayer(Logging):
         self,
         shape: tp.Tuple[int, ...],
         name: str = "Base layer",
+        notifier: tp.Callable = None,
     ):
-        super().__init__(name)
+        super().__init__(name, notifier)
 
         self.info("Initialising...")
 
@@ -156,8 +161,9 @@ class BaseLayer(Logging):
 
         # Convert HEX colours to RGB
         # ==================================================
-        cell_colour = self._to_rgba(cell_colour)[:-1]
-        rf_colour = self._to_rgba(rf_colour)[:-1]
+        if cell_colour is not None:
+            cell_colour = self._to_rgba(cell_colour)[:-1]
+        rf_colour = self._to_rgba(rf_colour)[:-1][None, :]
 
         # Process the requested cell coordinates.
         # ==================================================
@@ -171,13 +177,21 @@ class BaseLayer(Logging):
         # ==================================================
         if rf_colour is not None:
             for c in cells:
+
+                if rfs.kernel_params.filter == KernelFilter.Gaussian:
+                    v = rfs.rf_vals[c]
+                    v = (v - v.min()) / (v.max() - v.min())
+
+                else:
+                    v = np.ones_like(rfs.rf_vals[c])
+
                 canvas[
                     rfs.rf_rows[c],
                     rfs.rf_cols[c],
-                ] += rf_colour * rfs.rf_vals[c]
+                ] += rf_colour
+
 
         # Normalise
-        canvas /= canvas.max()
 
         # Plot the cells last so that they are superimposed
         # on top of the receptive fields.
@@ -187,7 +201,9 @@ class BaseLayer(Logging):
                 canvas[
                     rfs.cell_coordinates[c, 0],
                     rfs.cell_coordinates[c, 1],
-                ] = cell_colour
+                ] = cell_colour * canvas.max()
+
+        canvas /= canvas.max()
 
         # Now actually plot everything onto the canvas
         # ==================================================
@@ -207,7 +223,6 @@ class BaseLayer(Logging):
 
         return (fig, axes, mappables, canvas)
 
-
     def convolve(
         self,
         rfs: np.ndarray,
@@ -226,7 +241,6 @@ class BaseLayer(Logging):
         """
 
         # TODO
-        # Explore alternatives for matrix operations
-        # (SciPy, CuPy, Trilinos...)
+        # Explore alternatives for matrix operations (CuPy?)
         # ==================================================
         return rfs @ vector

@@ -14,7 +14,7 @@ import cv2 as cv
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.logging import Logging
+from pyrception.logging import Logger
 from pyrception.visual.util.types import Dim
 from pyrception.visual.util.types import Dims
 from pyrception.visual.layers.receptor import ReceptorLayer
@@ -24,7 +24,7 @@ from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.ganglion import GanglionLayer
 
 
-class Retina(Logging):
+class Retina(Logger):
     """
     A retinal layer aims to emulate the full processing pipeline
     of the mammalian retina, from receptors to ganglion cells.

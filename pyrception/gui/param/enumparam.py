@@ -10,7 +10,7 @@ from pyqtgraph.parametertree.parameterTypes import ListParameter
 from pyqtgraph.parametertree import registerParameterType
 
 # --------------------------------------
-from pyrception.visual.util.types import AuxEnum
+from pyrception.visual.utils.types import AuxEnum
 
 
 class EnumParameter(ListParameter):

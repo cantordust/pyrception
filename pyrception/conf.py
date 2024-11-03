@@ -7,9 +7,6 @@ from decouple import config
 from loguru import logger
 
 # --------------------------------------
-import numpy as np
-
-# --------------------------------------
 import pyqtgraph as pg
 
 pg.setConfigOptions(
@@ -19,8 +16,8 @@ pg.setConfigOptions(
 )
 
 # --------------------------------------
-from pyrception.visual.util.types import DType
-from pyrception.visual.util.types import LogLevel
+from pyrception.utils.types import DType
+from pyrception.utils.types import LogLevel
 
 # Logger configuration
 # ==================================================
@@ -41,7 +38,7 @@ for level in LogLevel:
 #: Log format.
 log_format = config(
     "PYRCEPTION_LOG_FORMAT",
-    default="Pyrception | <green>{time:YYYY-MM-DD@HH:mm:ss}</green> | <level>{message}</level>",
+    default="<magenta>Pyrception</magenta> | <cyan>{time:YYYY-MM-DD@HH:mm:ss}</cyan> | <level>{message}</level>",
 )
 
 log_config = {

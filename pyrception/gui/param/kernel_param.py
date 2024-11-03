@@ -7,8 +7,8 @@ from pyqtgraph.parametertree.parameterTypes import GroupParameter
 from pyqtgraph.parametertree import registerParameterType
 
 # --------------------------------------
-from pyrception.visual.util.types import KernelParams
-from pyrception.visual.util.types import KernelFilter
+from pyrception.visual.utils.types import KernelParams
+from pyrception.visual.utils.types import KernelFilter
 from pyrception.gui.param import factory as pf
 
 

@@ -10,7 +10,6 @@ import skimage as ski
 import matplotlib.pyplot as plt
 
 # --------------------------------------
-from pyrception.util import functions as pf
 from pyrception.visual.layers.bipolar import BipolarLayer
 from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.base import BaseLayer
@@ -33,21 +32,23 @@ class GanglionLayer(BaseLayer):
         inhibition_scale: float = 1.0,
         bipolar_params: tp.Dict[str, tp.Any] = None,
         amacrine_params: tp.Dict[str, tp.Any] = None,
+        notifier: tp.Callable = None,
     ):
 
         # Initialise the base
-        super().__init__(shape, name)
+        super().__init__(shape, name, notifier)
 
         # Initialise the bipolar receptive fields.
         # ==================================================
         self.bipolar = bipolar
         if bipolar_params is None:
             bipolar_params = {}
-        bipolar_params.setdefault("name", f"{name} | Bipolar RFs")
+        bipolar_params.setdefault("name", f"{name} | Bipolar receptive fields")
         bipolar_params["sectors"] = sectors
         self.bipolar_rfs = ReceptiveFields(
             self.shape,
             bipolar.rfs.cell_coordinates,
+            notifier=notifier,
             **bipolar_params,
         )
         self.bipolar_rfs.make_rfs()
@@ -57,7 +58,7 @@ class GanglionLayer(BaseLayer):
         self.amacrine = amacrine
         if amacrine_params is None:
             amacrine_params = {}
-        amacrine_params.setdefault("name", f"{name} | Amacrine RFs")
+        amacrine_params.setdefault("name", f"{name} | Amacrine receptive fields")
         amacrine_params["sectors"] = sectors
         self.amacrine_rfs = ReceptiveFields(
             self.shape,
@@ -66,9 +67,6 @@ class GanglionLayer(BaseLayer):
         )
         self.amacrine_rfs.make_rfs()
         self.inhibition_scale = inhibition_scale
-
-        # ON/OFF and OFF/ON ganglion cells
-        # self.on_off =
 
         self.info("Initialised.")
 
@@ -103,8 +101,8 @@ class GanglionLayer(BaseLayer):
 
     def plot_rfs(
         self,
-        bipolar_rf_colour: str = "#ff00ffff",
-        amacrine_rf_colour: int = "#00ff00ff",
+        bipolar_rf_colour: str = "#ff00ff",
+        amacrine_rf_colour: str = "#ffff00",
         *args,
         **kwargs,
     ) -> tp.Tuple[plt.Figure, plt.Axes, tp.List, np.ndarray]:
@@ -133,7 +131,7 @@ class GanglionLayer(BaseLayer):
         kwargs.setdefault("title", "Ganglion layer receptive fields")
 
         # Plot the bipolar cells
-        (fig, axes, _, canvas) = self._plot_rfs(
+        (fig, axes, _, bl_canvas) = self._plot_rfs(
             self.bipolar_rfs,
             rf_colour=bipolar_rf_colour,
             *args,
@@ -141,14 +139,16 @@ class GanglionLayer(BaseLayer):
         )
 
         # Plot the amacrine cells
-        (fig, axes, _, _) = self._plot_rfs(
+        (fig, axes, _, al_canvas) = self._plot_rfs(
             self.amacrine_rfs,
             rf_colour=amacrine_rf_colour,
-            canvas=canvas,
             fig=fig,
             axes=axes,
             *args,
             **kwargs,
         )
+
+        canvas = (bl_canvas + al_canvas)
+        canvas /= canvas.max()
 
         return (fig, axes, _, canvas)

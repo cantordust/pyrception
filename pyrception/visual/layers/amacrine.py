@@ -19,10 +19,11 @@ class AmacrineLayer(BaseLayer):
         sectors: int = 32,
         name: str = "Amacrine",
         rf_params: tp.Dict[str, tp.Any] = None,
+        notifier: tp.Callable = None,
     ):
 
         # Initialise the base
-        super().__init__(shape, name)
+        super().__init__(shape, name, notifier)
 
         # Store the bipolar layer
         self.bipolar = bipolar
@@ -30,11 +31,12 @@ class AmacrineLayer(BaseLayer):
         # Initialise the receptive fields.
         if rf_params is None:
             rf_params = {}
-        rf_params.setdefault("name", f"{name} | Amacrine RFs")
+        rf_params.setdefault("name", f"{name} | Receptive fields")
         self.rfs = ReceptiveFields(
             self.shape,
             bipolar.rfs.cell_coordinates,
             sectors,
+            notifier=notifier,
             **rf_params,
         )
         self.rfs.make_rfs()

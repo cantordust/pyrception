@@ -16,6 +16,9 @@ from tqdm import tqdm
 import av
 
 # --------------------------------------
+import threading
+
+# --------------------------------------
 import numpy as np
 
 # --------------------------------------
@@ -37,10 +40,10 @@ plt.rcParams.update(
 )
 
 # --------------------------------------
-import pyrception.util.functions as pcf
-from pyrception.visual.util.types import PlotEntry
-from pyrception.visual.util.types import ImagePlot
-from pyrception.visual.util.types import ScatterPlot
+import pyrception.utils.functions as pcf
+from pyrception.visual.utils.types import PlotEntry
+from pyrception.visual.utils.types import ImagePlot
+from pyrception.visual.utils.types import ScatterPlot
 
 
 def cwd(path: tp.Union[Path, str]):
@@ -64,6 +67,16 @@ def timestamp(ms: bool = False) -> str:
         end = -3
 
     return datetime.strftime(datetime.utcnow(), fmt)[:end]
+
+def thread_id() -> int:
+    '''
+    Get the ID of the current thread.
+
+    Returns:
+        int:
+            The thread ID.
+    '''
+    return threading.get_ident()
 
 
 def plot(

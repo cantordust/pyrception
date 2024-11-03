@@ -4,14 +4,13 @@ import typing as tp
 import numpy as np
 
 # --------------------------------------
-from pyrception import conf
 from pyrception.conf import logger
-from pyrception.visual.util.types import KernelFilter
+from pyrception.visual.utils.types import KernelFilter
 from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.layers.horizontal import HorizontalLayer
 from pyrception.visual.rf import ReceptiveFields
-from pyrception.visual.util.types import RFArrangement
+from pyrception.visual.utils.types import RFArrangement
 
 class BipolarLayer(BaseLayer):
     """
@@ -29,21 +28,23 @@ class BipolarLayer(BaseLayer):
         name: str = "Bipolar",
         forgetting_range: tp.Tuple[float, float] = (0.05, 0.95),
         rf_params: tp.Dict[str, tp.Any] = None,
+        notifier: tp.Callable = None,
     ):
 
         # Initialise the base
-        super().__init__(shape, name)
+        super().__init__(shape, name, notifier)
         self.receptor = receptor
         self.horizontal = horizontal
 
         # Initialise the receptive fields.
         if rf_params is None:
             rf_params = {}
-        rf_params.setdefault("name", f"{name} | Bipolar RFs")
+        rf_params.setdefault("name", f"{name} | Receptive fields")
         self.rfs = ReceptiveFields(
             self.shape,
             receptor.rfs.cell_coordinates,
             sectors,
+            notifier=notifier,
             **rf_params,
         )
         self.rfs.make_rfs()

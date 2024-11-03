@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --------------------------------------
-from pyrception import conf
 from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.rf import ReceptiveFields
@@ -22,21 +21,23 @@ class HorizontalLayer(BaseLayer):
         sectors: int = 32,
         name: str = "Horizontal",
         rf_params: tp.Dict[str, tp.Any] = None,
+        notifier: tp.Callable = None,
     ):
 
         # Initialise the base
-        super().__init__(shape, name)
+        super().__init__(shape, name, notifier)
         self.receptor = receptor
 
         # Initialise the receptive fields.
         if rf_params is None:
             rf_params = {}
-        rf_params.setdefault("name", f"{name} | Horizontal RFs")
+        rf_params.setdefault("name", f"{name} | Receptive fields")
         rf_params.setdefault("create_feedback", True)
         self.rfs = ReceptiveFields(
             self.shape,
             receptor.rfs.cell_coordinates,
             sectors,
+            notifier=notifier,
             **rf_params,
         )
         self.rfs.make_rfs()

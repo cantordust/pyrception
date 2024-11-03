@@ -12,7 +12,7 @@ from pyqtgraph.parametertree import Parameter
 from pyqtgraph.parametertree.parameterTypes import GroupParameter
 
 # --------------------------------------
-from pyrception.visual.util.types import AuxEnum
+from pyrception.visual.utils.types import AuxEnum
 from pyrception.gui.param.enumparam import EnumParameter
 from pyrception.gui.param.rf_param import RFParameterGroup
 from pyrception.gui.param.syncparam import SyncParameter
@@ -139,9 +139,9 @@ def make_enum(
 
 def make_rf_params(**kwargs) -> RFParameterGroup:
 
-    kwargs["type"] = "rf_params"
-    kwargs["name"] = "rf_params"
-    kwargs["title"] = "RF parameters"
+    kwargs.setdefault("type", "rf_params")
+    kwargs.setdefault("name", "rf_params")
+    kwargs.setdefault("title", "RF parameters")
 
     return Parameter.create(**kwargs)
 

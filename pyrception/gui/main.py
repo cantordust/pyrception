@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QTabWidget
 
 # --------------------------------------
 from pyrception.conf import logger
-from pyrception.gui.display.tab import Tab
+from pyrception.gui.core.tab import Tab
 from pyrception.visual import InputType
 
 

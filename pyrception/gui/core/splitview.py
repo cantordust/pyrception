@@ -6,9 +6,7 @@ import numpy as np
 # --------------------------------------
 from PySide6.QtCore import Qt
 from PySide6.QtCore import Slot
-
 from PySide6.QtWidgets import QSplitter
-
 from PySide6.QtGui import QColor
 
 # --------------------------------------
@@ -16,7 +14,8 @@ import pyqtgraph as pg
 
 # --------------------------------------
 # from pyrception.gui.conf import conf
-from pyrception.gui.display.canvas import Canvas
+from pyrception.gui.core.canvas import Canvas
+
 # from pyrception.gui import Plot
 # from pyrception.gui import Layer
 
@@ -25,8 +24,10 @@ class SplitView(QSplitter):
     def __init__(
         self,
         canvas: Canvas,
+        *args,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(*args, **kwargs)
 
         # Canvas
         # ==================================================
