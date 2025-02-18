@@ -31,7 +31,7 @@ class Worker(QObject):
 
     def __init__(
         self,
-        pfun: tp.List[partial] = None,
+        pfun: list[partial] = None,
         *args,
         **kwargs,
     ):

@@ -37,7 +37,7 @@ class SplitView(QSplitter):
     # @Slot(list, int)
     # def plot(
     #     self,
-    #     layers: tp.List[Layer],
+    #     layers: list[Layer],
     #     current_layer_idx: int,
     # ):
     #     self.radial_plots.clear()

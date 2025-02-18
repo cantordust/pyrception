@@ -13,9 +13,9 @@ from pyqtgraph.parametertree.parameterTypes import GroupParameter
 
 # --------------------------------------
 from pyrception.visual.utils.types import AuxEnum
-from pyrception.gui.param.enumparam import EnumParameter
-from pyrception.gui.param.rf_param import RFParameterGroup
-from pyrception.gui.param.syncparam import SyncParameter
+from pyrception.gui.param.enumerator import EnumParameter
+from pyrception.gui.param.rf import RFParameterGroup
+from pyrception.gui.param.sync import SyncParameter
 
 
 def title_name(fun: tp.Callable):
@@ -40,7 +40,7 @@ def title_name(fun: tp.Callable):
 
 @title_name
 def make_group(
-    children: tp.List = None,
+    children: list = None,
     **kwargs,
 ) -> Parameter:
     """
@@ -48,7 +48,7 @@ def make_group(
 
     Args:
 
-        children (tp.List, optional):
+        children (list, optional):
             Sub-parameters to be grouped. Defaults to None.
 
     Returns:
@@ -112,7 +112,7 @@ def make_str(**kwargs) -> Parameter:
 
 @title_name
 def make_list(
-    limits: tp.List,
+    limits: list,
     **kwargs,
 ) -> Parameter:
     p = {
@@ -152,7 +152,7 @@ def make_sync_params(
     value: tp.Iterable,
     limits: tp.Iterable,
     default: bool = True,
-    names: tp.List[str] = None,
+    names: list[str] = None,
     **kwargs,
 ) -> SyncParameter:
 

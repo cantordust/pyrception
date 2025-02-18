@@ -1,32 +1,27 @@
 # --------------------------------------
-import typing as tp
-
-# --------------------------------------
-import multiprocessing as mp
-
-# --------------------------------------
 import sys
-
-# --------------------------------------
-import numpy as np
 
 # --------------------------------------
 from pathlib import Path
 
 # --------------------------------------
-from PySide6.QtCore import Slot
+import multiprocessing as mp
+
+# --------------------------------------
 from PySide6.QtGui import QAction
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QApplication
+
+# --------------------------------------
+from PySide6.QtCore import Slot
+from PySide6.QtWidgets import QTabWidget
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtWidgets import QMainWindow
-from PySide6.QtWidgets import QTabWidget
+from PySide6.QtWidgets import QApplication
 
 # --------------------------------------
 from pyrception.conf import logger
-from pyrception.gui.core.tab import Tab
 from pyrception.visual import InputType
-
+from pyrception.gui.core.tab import Tab
 
 class MainWindow(QMainWindow):
 
@@ -162,9 +157,6 @@ def run():
     # The main feature
     app = QApplication([])
     mw = MainWindow()
-
-    img_file = Path("./docs/source/notebooks/resources/cat.jpg").resolve().absolute()
-    mw._open_image(img_file)
 
     mw.showMaximized()
     mw.show()

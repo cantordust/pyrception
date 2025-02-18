@@ -26,7 +26,7 @@ class SyncParameter(GroupParameter):
         value: tp.Iterable,
         limits: tp.Iterable,
         default: bool = True,
-        names: tp.List = None,
+        names: list = None,
         **kwargs
     ):
 

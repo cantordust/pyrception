@@ -160,7 +160,7 @@ class Canvas(QWidget):
 
     def _auto_range(
         self,
-        iviews: tp.List[ImageView],
+        iviews: list[ImageView],
     ):
         for iview in iviews:
             iview.autoRange()
@@ -346,7 +346,7 @@ class Canvas(QWidget):
 
     def add_receptor(
         self,
-        shape: tp.Tuple,
+        shape: tuple,
         **params,
     ):
 
@@ -364,7 +364,7 @@ class Canvas(QWidget):
 
     def add_horizontal(
         self,
-        shape: tp.Tuple,
+        shape: tuple,
         **params,
     ):
 
@@ -388,7 +388,7 @@ class Canvas(QWidget):
 
     def add_bipolar(
         self,
-        shape: tp.Tuple,
+        shape: tuple,
         **params,
     ):
 
@@ -411,7 +411,7 @@ class Canvas(QWidget):
 
     def add_amacrine(
         self,
-        shape: tp.Tuple,
+        shape: tuple,
         **params,
     ):
 
@@ -433,7 +433,7 @@ class Canvas(QWidget):
 
     def add_ganglion(
         self,
-        shape: tp.Tuple,
+        shape: tuple,
         **params,
     ):
 
