@@ -1,33 +1,41 @@
-import typing as tp
+# --------------------------------------
+from typing import Any
 
 # --------------------------------------
-import matplotlib.pyplot as plt
+from collections.abc import Iterable
+from collections.abc import Callable
+
+# --------------------------------------
 from matplotlib.colors import to_rgba
 
 # --------------------------------------
 import numpy as np
 
 # --------------------------------------
+from bokeh.plotting import figure
+
+# --------------------------------------
 import skimage as ski
 
 # --------------------------------------
 from pyrception.utils import functions as pf
-from pyrception.utils.logging import Logger
-from pyrception.visual import ReceptiveFields
-from pyrception.visual.utils.types import ImagePlot
-from pyrception.visual.utils.types import KernelFilter
+from pyrception.utils.logging import LoggingMixin
+
+# from pyrception.visual import ReceptiveFields
+# from pyrception.visual.utils.types import ImagePlot
+from pyrception.utils.types import KernelFilter
 
 
-class BaseLayer(Logger):
+class BaseLayer(LoggingMixin):
     """
     Simple layer implementing some basic methods used by all retinal layers.
     """
 
     def __init__(
         self,
-        shape: tp.Tuple[int, ...],
+        shape: tuple[int, ...],
         name: str = "Base layer",
-        notifier: tp.Callable = None,
+        notifier: Callable = None,
     ):
         super().__init__(name, notifier)
 
@@ -50,13 +58,15 @@ class BaseLayer(Logger):
 
     def _flatten(
         self,
-        container: tp.Any,
+        container: Iterable,
     ) -> np.ndarray:
         """
         Flatten a potentially nested (heterogeneous) array of elements.
 
+        TODO: Move this into the `utils` module.
+
         Args:
-            container (tp.Any):
+            container (Iterable):
                 A container or a numeric value.
 
         Returns:
@@ -67,7 +77,7 @@ class BaseLayer(Logger):
         if isinstance(container, (int, float)):
             array.append(container)
 
-        elif isinstance(container, tp.Iterable):
+        elif isinstance(container, Iterable):
             for element in container:
                 if isinstance(element, np.ndarray):
                     element = element.tolist()
@@ -77,13 +87,15 @@ class BaseLayer(Logger):
 
     def _to_rgba(
         self,
-        colour: tp.Union[str, tp.Iterable],
+        colour: str | Iterable,
     ) -> np.ndarray:
         """
         Convert a colour specified as HEX into RGBA (a 4-tuple).
 
+        TODO: Move this into the `utils` module.
+
         Args:
-            colour (tp.Union[str, tp.Iterable]):
+            colour (str | Iterable):
                 The colour specified as a HEX string or an iterable.
 
         Returns:
@@ -103,17 +115,12 @@ class BaseLayer(Logger):
 
     def _plot_rfs(
         self,
-        rfs: ReceptiveFields,
-        cells: tp.Union[tp.List[int], tp.Tuple[int]] = None,
-        cell_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#00ffff",
-        rf_colour: tp.Tuple[str, tp.Tuple[int, ...]] = "#ff00ff",
-        title: str = "Receptive fields",
-        figsize: tp.Tuple = (8, 6),
-        canvas: np.ndarray = None,
-        fig: plt.Figure = None,
-        axes: plt.Axes = None,
-        spines: bool = False,
-    ) -> tp.Tuple[plt.Figure, plt.Axes, tp.List, np.ndarray]:
+        rfs: Any,
+        cells: list[int] | tuple[int] = None,
+        cell_colour: tuple[str, tuple[int, ...]] = "#00ffff",
+        rf_colour: tuple[str, tuple[int, ...]] = "#ff00ff",
+        weighted: bool = False,
+    ) -> figure:
         """
         Plot the receptive fields of amacrine cells.
         This takes into account the sparsity of bipolar cells.
@@ -123,43 +130,25 @@ class BaseLayer(Logger):
             rfs: (ReceptiveFields):
                 Receptive fields to plot.
 
-            cells (tp.Union[tp.List[int], tp.Tuple[int]], optional):
+            cells (list[int] | tuple[int], optional):
                 Coordinates of the cells to plot. Defaults to None.
 
-            cell_colour (tp.Tuple[str, tp.Tuple[int, ...]], optional):
+            cell_colour (tuple[str, tuple[int, ...]], optional):
                 The colour to use for highlighting the plotted cells.
-                Defaults to
+                Defaults to "#00ffff".
 
-            rf_colour (tp.Tuple[str, tp.Tuple[int, ...]], optional):
+            rf_colour (tuple[str, tuple[int, ...]], optional):
                 The colour to use for highlighting the plotted receptive field.
-
-            title (str, optional):
-                Plot title. Defaults to "Amacrine cell receptive fields".
-
-            figsize (tp.Tuple, optional):
-                Figure size. Defaults to (8, 6).
-
-            fig (plt.Figure, optional):
-                tp.Optional preexisting Figure instance. Defaults to None.
-
-            axes (plt.Axes, optional):
-                tp.Optional preexisting Axes instance. Defaults to None.
+                Defaults to "#ff00ff".
 
         Returns:
-            tp.Tuple[plt.Figure, plt.Axes, tp.List]:
-                A tuple containing:
-                    1. A Figure object.
-                    2. An Axes object.
-                    3. A list of mappables (which can be used for animations).
+            np.ndarray:
+                A visualisation of the receptive fields.
         """
         # Bipolar cell input for a single amacrine cell
-        if canvas is None:
-            canvas = np.zeros((rfs.height, rfs.width, 3))
+        canvas = np.zeros((rfs.height, rfs.width, 3))
 
-        elif len(canvas.shape) == 2:
-            canvas = np.vstack([canvas] * 3)
-
-        # Convert HEX colours to RGB
+        # Convert HEX colours to RGBA
         # ==================================================
         if cell_colour is not None:
             cell_colour = self._to_rgba(cell_colour)[:-1]
@@ -168,7 +157,7 @@ class BaseLayer(Logger):
         # Process the requested cell coordinates.
         # ==================================================
         cells = (
-            np.arange(len(rfs.cell_coordinates), dtype=np.int32)
+            np.arange(len(rfs.cell_coordinates), dtype=np.uint32)
             if cells is None
             else self._flatten(cells)
         )
@@ -178,20 +167,15 @@ class BaseLayer(Logger):
         if rf_colour is not None:
             for c in cells:
 
-                if rfs.kernel_params.filter == KernelFilter.Gaussian:
-                    v = rfs.rf_vals[c]
-                    v = (v - v.min()) / (v.max() - v.min())
-
-                else:
-                    v = np.ones_like(rfs.rf_vals[c])
+                colour = rf_colour
+                if weighted:
+                    # colour = colour * rfs.kernels[c].weights[:,None]
+                    colour = colour * rfs.kernels[c].weights[:, None]
 
                 canvas[
-                    rfs.rf_rows[c],
-                    rfs.rf_cols[c],
-                ] += rf_colour
-
-
-        # Normalise
+                    rfs.kernels[c].coordinates[:, 0],
+                    rfs.kernels[c].coordinates[:, 1],
+                ] += colour
 
         # Plot the cells last so that they are superimposed
         # on top of the receptive fields.
@@ -201,27 +185,11 @@ class BaseLayer(Logger):
                 canvas[
                     rfs.cell_coordinates[c, 0],
                     rfs.cell_coordinates[c, 1],
-                ] = cell_colour * canvas.max()
+                ] = (
+                    cell_colour * canvas.max() / 3
+                )
 
-        canvas /= canvas.max()
-
-        # Now actually plot everything onto the canvas
-        # ==================================================
-        plot_params = ImagePlot(
-            canvas,
-            colourbar=False,
-            title=title,
-            spines=spines,
-        )
-
-        (fig, axes, mappables) = pf.plot(
-            [plot_params],
-            figsize=figsize,
-            fig=fig,
-            axes=axes,
-        )
-
-        return (fig, axes, mappables, canvas)
+        return ski.exposure.rescale_intensity(canvas, out_range=(0, 1))
 
     def convolve(
         self,
@@ -244,3 +212,14 @@ class BaseLayer(Logger):
         # Explore alternatives for matrix operations (CuPy?)
         # ==================================================
         return rfs @ vector
+
+    def update_state(self, dt: float, *args, **kwargs):
+        """
+        Updates the internal state based on temporal dynamics.
+        Should be be implemented in derived classes.
+
+        Args:
+            dt (float):
+                The time interval since the last input.
+        """
+        pass

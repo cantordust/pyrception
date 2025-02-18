@@ -34,12 +34,12 @@ class EventLoader:
     """
 
     @property
-    def shape(self) -> tp.Tuple[int]:
+    def shape(self) -> tuple[int]:
         """
         The shape of the (NumPy) data contained in the HDF5 file.
 
         Returns:
-            tp.Tuple[int]:
+            tuple[int]:
                 The shape of the data as a tuple of integers.
         """
         return self._data.shape if self._data is not None else None
@@ -125,7 +125,7 @@ class EventLoader:
             path (tp.Union[str, Path]):
                 Path to the HDF5 file.
 
-            keys (tp.Optional[tp.Union[str, tp.List[str]]], optional):
+            keys (tp.Optional[tp.Union[str, list[str]]], optional):
                 A key or a list of keys specifying the data.
                 Defaults to None.
 

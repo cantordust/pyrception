@@ -14,11 +14,11 @@ class AmacrineLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: tp.Tuple[int, ...],
+        shape: tuple[int, ...],
         bipolar: BipolarLayer,
         sectors: int = 32,
         name: str = "Amacrine",
-        rf_params: tp.Dict[str, tp.Any] = None,
+        rf_params: dict[str, tp.Any] = None,
         notifier: tp.Callable = None,
     ):
 
@@ -41,19 +41,20 @@ class AmacrineLayer(BaseLayer):
         )
         self.rfs.make_rfs()
 
-        # Activations for the ON and OFF pathways
-        self.on = np.zeros((self.rfs.neuron_count,))
-        self.off = np.zeros_like(self.on)
+        # Membrane potential
+        self.membrane = np.zeros((self.rfs.neuron_count,))
 
         self.info("Initialised.")
 
-    def forward(self):
+    def forward(
+        self,
+        dt: float | None = None,
+    ) -> np.ndarray:
 
         # Compute the activation of the amacrine cells
-        self.on = self.convolve(self.rfs.forward_synapses, self.bipolar.on)
-        self.off = self.convolve(self.rfs.forward_synapses, self.bipolar.off)
+        self.membrane = self.convolve(self.rfs.forward_synapses, self.bipolar.membrane)
 
-        return (self.on, self.off)
+        return self.membrane
 
     def plot_rfs(
         self,
@@ -61,6 +62,5 @@ class AmacrineLayer(BaseLayer):
         **kwargs,
     ):
 
-        kwargs.setdefault("title", "Amacrine layer receptive fields")
         kwargs.setdefault("rf_colour", "#ff00ffff")
         return self._plot_rfs(self.rfs, *args, **kwargs)

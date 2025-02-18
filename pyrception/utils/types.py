@@ -1,81 +1,71 @@
 # --------------------------------------
-import typing as tp
+import enum
 
 # --------------------------------------
 import numpy as np
 
 # --------------------------------------
-import enum
+from dataclasses import dataclass
+from dataclasses import field
 
 
-class AuxEnum(enum.Enum):
-
-    @classmethod
-    def get(
-        cls: enum.Enum,
-        key: str,
-        default: enum.Enum = None,
-    ):
-        _key = key.lower()
-        for dt in cls:
-            if dt.name.lower() == _key:
-                return dt
-        return default
-
-    @classmethod
-    def get_value(
-        cls: enum.Enum,
-        key: str,
-    ) -> tp.Optional[enum.Enum]:
-        item = cls.get(key)
-        return None if item is None else item.value
-
-    @classmethod
-    def contains(
-        cls: enum.Enum,
-        key: str,
-    ) -> bool:
-        """
-        Check if a log key is valid.
-
-        Args:
-            key (str):
-                The key to query for.
-
-        Returns:
-            bool:
-                Indicator if the key was found.
-        """
-        return cls.get(key) is not None
-
-    @classmethod
-    def names(cls):
-        return {o.name: o for o in cls}
-
-
-class DType(AuxEnum):
+class InputType(enum.StrEnum):
     """
-    NumPy data type.
+    Input type.
     """
 
-    F32 = np.float32
-    F64 = np.double
-    I8 = np.int8
-    I16 = np.int16
-    I32 = np.int32
-    I64 = np.int64
-    U8 = np.uint8
+    Image = enum.auto()
+    Video = enum.auto()
+    Events = enum.auto()
 
 
-class LogLevel(AuxEnum):
+class RFArrangement(enum.StrEnum):
     """
-    Enum class that facilitates the configuration of logging levels.
+    Receptive field distribution.
     """
 
-    Trace = "<light-blue>"
-    Debug = "<cyan>"
-    Info = "<light-green>"
-    Success = "<green>"
-    Warning = "<yellow>"
-    Error = "<light-red>"
-    Critical = "<red>"
+    LogPolar = enum.auto()
+    Cartesian = enum.auto()
+
+
+class KernelFilter(enum.StrEnum):
+    """
+    Filter implemented by the receptive field.
+    """
+
+    Uniform = enum.auto()
+    Gaussian = enum.auto()
+    Gabor = enum.auto()
+
+
+class KernelShape(enum.StrEnum):
+    """
+    Receptive field shape.
+    """
+
+    Elliptic = enum.auto()
+    Rectangular = enum.auto()
+
+
+@dataclass
+class Dim:
+    """
+    A simple dataclass for holding dimension information.
+    """
+
+    height: int = 0
+    width: int = 0
+    depth: int = 1
+    span: int = 0
+
+
+@dataclass
+class Dims:
+    """
+    A simple dataclass for holding dimension information
+    for multiple views.
+    """
+
+    original: Dim = field(default_factory=Dim)
+    padded: Dim = field(default_factory=Dim)
+    padding: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0, 0]))

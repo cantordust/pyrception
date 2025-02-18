@@ -15,19 +15,23 @@ pip install pyrception
 
 ### GitHub
 
-Clone the repository and install it (optionally in in development mode):
+Clone the repository and install it (optionally in in development mode).
 
-=== "HTTPS"
+!!! note
 
-    ``` shell
-    git clone https://github.com/cantordust/pyrception.git
-    ```
+    Cloning using `HTTPS` or `SSH`.
 
-=== "Git+SSH"
+    === "HTTPS"
 
-    ``` shell
-    git clone git@github.com:cantordust/pyrception.git
-    ```
+        ``` shell
+        git clone https://github.com/cantordust/pyrception.git
+        ```
+
+    === "Git+SSH"
+
+        ``` shell
+        git clone git@github.com:cantordust/pyrception.git
+        ```
 
 ``` shell
 cd pyrception
@@ -54,6 +58,7 @@ mkdocs serve
 
 ## Short-term
 Visual package:
+
 - [X] Receptor signal scaling following Weber's law.
 - [X] Retinal ganglion cells.
 - [ ] Saccadic movements (WIP).

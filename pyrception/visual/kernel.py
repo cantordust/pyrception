@@ -7,12 +7,12 @@ import numpy as np
 import skimage as ski
 
 # --------------------------------------
-from pyrception.utils.logging import Logger
-from pyrception.visual.utils.types import KernelFilter
-from pyrception.visual.utils.types import KernelShape
+from pyrception.utils.logging import LoggingMixin
+from pyrception.utils.types import KernelFilter
+from pyrception.utils.types import KernelShape
 
 
-class Kernel(Logger):
+class Kernel(LoggingMixin):
 
     def __init__(
         self,
@@ -23,8 +23,9 @@ class Kernel(Logger):
         shape: KernelShape = KernelShape.Elliptic,
         filter: KernelFilter = KernelFilter.Uniform,
         angle: float = 0.0,
+        index_map: np.ndarray = None,
         substrate: np.ndarray = None,
-        params: tp.Dict = None,
+        params: dict = None,
         weights: np.ndarray = None,
     ):
 
@@ -33,7 +34,7 @@ class Kernel(Logger):
             params = {}
 
         if crop is None:
-            np.array([0, 0], dtype=np.int32)
+            crop = np.array([0, 0], dtype=np.uint32)
         self.crop = crop
 
         self.size = size
@@ -45,7 +46,6 @@ class Kernel(Logger):
         self.filter = filter
         self.angle = angle
         self.params = params
-        self.params = params
 
         self.coordinates = None
         self.indices = None
@@ -53,7 +53,7 @@ class Kernel(Logger):
         self.weights = weights
 
         self.make_shape()
-        self.extract_indices(substrate)
+        self.extract_indices(index_map, substrate)
         self.make_filter()
 
     @property
@@ -97,9 +97,9 @@ class Kernel(Logger):
         """
 
         filter_functions = {
-            KernelFilter.Uniform: self._make_uniform_kernel,
-            KernelFilter.Gaussian: self._make_gaussian_kernel,
-            KernelFilter.Gabor: self._make_gabor_kernel,
+            KernelFilter.Uniform: self._make_uniform_weights,
+            KernelFilter.Gaussian: self._make_gaussian_weights,
+            KernelFilter.Gabor: self._make_gabor_weights,
         }
 
         filter_function = filter_functions.get(self.filter, None)
@@ -111,6 +111,7 @@ class Kernel(Logger):
 
     def extract_indices(
         self,
+        index_map: np.ndarray,
         substrate: np.ndarray,
     ):
         """
@@ -118,14 +119,24 @@ class Kernel(Logger):
         arrangement of input cells in the substrate.
 
         Args:
-            canvas (np.ndarray):
+            index_map (np.ndarray):
                 A 2D array containing the indices of each cell in the substrate.
+
+            substrate (np.ndarray):
+                The input substrate.
         """
 
         # Indices
         # ==================================================
-        overlap = substrate[self.coordinates[:, 0], self.coordinates[:, 1]]
+        overlap = index_map[self.coordinates[:, 0], self.coordinates[:, 1]]
         self.indices = overlap[overlap != 0]
+        # print(f"==[ indices: {self.indices}")
+
+        # Re-extract the coordinates from the indices and the substrate.
+        # This is necessary to sparsify the coordinates for layers with sparse input.
+        # print(f"==[ centre: {self.center}")
+        # print(f"==[ len(substrate): {len(substrate)}")
+        self.coordinates = substrate[self.indices]
 
     def _make_elliptic_kernel(self):
         """
@@ -176,34 +187,31 @@ class Kernel(Logger):
         Create a rectangular kernel centred at a certain pixel and
         having the specified spread (side lengths).
         The kernel can be optionally rotated at an angle.
-
-        WIP: This is a stub - to be implemented.
         """
 
         center = self.center - self.crop
-        half_size = self.size.astype(np.int32) // 2
 
         # Coordinates
         # ==================================================
         self.coordinates = (
             np.stack(
                 ski.draw.rectangle(
-                    center - half_size,
-                    center + half_size,
+                    center - self.size,
+                    center + self.size,
                     shape=self.fov,
                 ),
-                axis=1,
+                axis=2,
             )
             + self.crop
-        )
+        ).reshape(-1,2)
 
         # Outline
         # ==================================================
         self.outline = (
             np.stack(
-                ski.draw.rectangle(
-                    center - half_size,
-                    center + half_size,
+                ski.draw.rectangle_perimeter(
+                    center - self.size,
+                    center + self.size,
                     shape=self.fov,
                 ),
                 axis=1,
@@ -211,168 +219,48 @@ class Kernel(Logger):
             + self.crop
         )
 
-    def _make_uniform_kernel(self):
+    def _make_uniform_weights(self):
         """
-        2D uniform kernel with a given centre, spread and rotation angle.
-
-        Args:
-
-            centre (tp.Tuple[int, float]):
-                Coordinates of the centre of the kernel.
-
-            spread (tp.Tuple[int, float]):
-                Spread of the kernel (e.g., semi-major axes in the case of elliptic kernels).
-
-            angle (float, optional):
-                Rotation angle. Defaults to 0.0.
-
-            weights (tp.Union[np.ndarray, float], optional):
-                Weights of the kernel. Defaults to None.
-                If provided as a `float`, all kernels will have the same weight.
-
-            substrate (np.ndarray):
-                Coordinate substrate as an array with a shape of (N, 2).
-                Can be sparse.
-
-        Returns:
-            tp.Tuple[np.ndarray, np.ndarray]:
-                Values and indices of the kernel (suitable for a sparse tensor).
+        Weights from a uniform distribution.
         """
 
-        # if substrate is None:
-        #     substrate = self.substrate
-
-        # # Get the rows and columns for the kernel
-        # (rows, cols, idx, _, _) = self.make(
-        #     centre,
-        #     spread,
-        #     angle,
-        #     substrate,
-        # )
-
-        # # Bail out if the kernel size is 0
-        # if cols.size == 0:
-        #     return
-
-        # if len(self.coordinates) == 0:
-        #     print(f"==[ center: {self.center}")
-        #     print(f"==[ size: {self.size}")
+        if self.coordinates.size == 0:
+            return
 
         if self.weights is None:
-            self.weights = 1 / self.coordinates.size
+            self.weights = np.full(
+                (len(self.coordinates),),
+                1 / len(self.coordinates),
+                dtype=np.float32,
+            )
 
-        self.weights = np.full(
-            (self.coordinates.shape[0],),
-            self.weights,
-            dtype=np.float32,
-        )
-
-    # @profile
-    def _make_gaussian_kernel(self):
+    def _make_gaussian_weights(self):
         """
-        2D Gaussian kernel with a given mean, SD and rotation angle.
-
-        Args:
-
-            centre (tp.Tuple[int, float]):
-                Coordinates of the centre of the kernel.
-
-            spread (tp.Tuple[int, float]):
-                Spread of the kernel (e.g., semi-major axes in the case of elliptic kernels).
-
-            angle (float, optional):
-                Rotation angle. Defaults to 0.0.
-
-            sd (tp.Union[tp.Tuple[float, ...], float], optional):
-                Standard deviation of the kernel in x and y directions
-                as a percentage of the spread. Defaults to (0.37, 0.37).
-                This is approximately one standard deviation.
-
-            normalise (bool, optional):
-                Toggle for Gaussian normalisation. Defaults to True.
-
-            substrate (np.ndarray):
-                Coordinate substrate as an array with a shape of (N, 2).
-                Can be sparse. Defaults to None.
-
-        Returns:
-            tp.Tuple[np.ndarray, np.ndarray]:
-                Values and indices of the kernel (suitable for a sparse tensor).
+        Weights following a 2D Gaussian distribution.
         """
 
         center = self.center - self.crop
         size = self.size.astype(np.int32)
 
-        # Get the rows and columns for the kernel
-        (rows, cols, idx, xs, ys) = self.make_shape(
-            centre,
-            spread,
-            angle,
-            substrate,
-        )
-
-        # Bail out if the kernel size is 0
-        if cols.size == 0:
-            return
-
-        # Compute the standard deviation relative to the spread
-        if isinstance(sd, float):
-            sd = [sd, sd]
-        sd = np.array(sd, dtype=np.float32)
-        sd *= spread
+        sd = size * 0.5
 
         # Create a Gaussian distribution
-        vals = np.exp(-0.5 * ((xs / sd[0]) ** 2 + (ys / sd[1]) ** 2))
+        coords = (self.coordinates - center) / (sd)
+
+        self.weights = np.exp(-0.5 * (coords[:, 0] ** 2 + coords[:, 1] ** 2))
 
         # Normalise if necessary
-        if normalise:
-            vals /= 2 * np.pi * (sd[0] * sd[1])
+        if self.params.get("normalise"):
+            self.weights /= 2 * np.pi * (sd[0] * sd[1])
 
-        # Return the kernel parameters.
-        return (rows, cols, vals, idx)
-
-    def _make_gabor_kernel(self):
+    def _make_gabor_weights(self):
         """
-        Gabor filters.
+        Weights corresponding to a Gabor filter.
 
-        WIP: This is just a stub.
+        WIP: This is a stub.
         TODO: Check if we can incorporate this into the Gaussian kernel method
         since we only have to add a couple of extra parameters and superimpose
         the sine funciton.
-
-        Args:
-
-            centre (tp.Tuple[int, float]):
-                Coordinates of the centre of the kernel.
-
-            spread (tp.Tuple[int, float]):
-                Spread of the kernel (e.g., semi-major axes in the case of elliptic kernels).
-
-            angle (float, optional):
-                Rotation angle. Defaults to 0.0.
-
-            sd (tp.Union[tp.Tuple[float, ...], float], optional):
-                Standard deviation of the kernel in x and y directions
-                as a percentage of the spread. Defaults to (0.37, 0.37).
-                This is approximately one standard deviation.
-
-            frequency (float, optional):
-                Sine frequency. Defaults to 0.1
-
-            aspect (float, optional):
-                Aspect. Defaults to 0.1
-
-            phase (float, optional):
-                Sine phase. Defaults to 0.0
-
-            substrate (np.ndarray):
-                Coordinate substrate as an array with a shape of (N, 2).
-                Can be sparse.
-
-        Returns:
-            tp.Tuple[np.ndarray, np.ndarray]:
-                Values and indices of the kernel (suitable for a sparse tensor).
         """
 
-        if substrate is None:
-            substrate = self.substrate
+        pass

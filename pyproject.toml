@@ -1,40 +1,72 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pyrception"]
 
 [project]
 authors = [{ name = "Alexander Hadjiivanov" }]
 name = "pyrception"
-version = "0.2.3"
+version = "0.2.4"
+requires-python = ">= 3.11"
 dependencies = [
     "av",
-    "cloup",
-    "furo",
+    "black",
     "h5py",
     "imageio[ffmpeg]",
     "ipykernel",
-    "ipympl",
-    "jupyter_rfb",
-    "line_profiler",
+    "ipywidgets",
     "loguru",
-    "manim",
     "matplotlib",
-    "nbsphinx",
-    "numba",
     "numpy",
     "opencv-python",
-    "pyqtgraph",
-    "PySide6",
-    "python-decouple",
+    "plotly[express]",
+    "pydantic-settings",
+    "rich",
+    "ruff",
     "scikit-image",
     "scipy",
-    "sphinx",
     "tqdm",
 ]
 
 [project.optional-dependencies]
-gui = []
-cli = []
+gui = ["pyqtgraph", "PySide6"]
+cli = ["cloup"]
+events = ["tonic"]
+dev = ["py-spy"]
+docs = [
+    "mike",
+    "mkdocs-jupyter",
+    "mkdocs-material",
+    "mkdocs",
+    "mkdocstrings[python]",
+]
 
 [project.scripts]
 pyrception = "pyrception.gui.main:run"
+
+[tool.ruff.format]
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint.isort]
+from-first = false
+force-single-line = true
+force-sort-within-sections = true
+length-sort = true
+lines-after-imports = 1
+order-by-type = true
+forced-separate = [
+    "future",
+    "typing",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+    "pyrception",
+]
+relative-imports-order = "closest-to-furthest"

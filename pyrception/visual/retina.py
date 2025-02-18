@@ -14,9 +14,9 @@ import cv2 as cv
 
 # --------------------------------------
 from pyrception import conf
-from pyrception.logging import Logger
-from pyrception.visual.util.types import Dim
-from pyrception.visual.util.types import Dims
+from pyrception.utils.logging import LoggingMixin
+from pyrception.visual.utils.types import Dim
+from pyrception.visual.utils.types import Dims
 from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.layers.horizontal import HorizontalLayer
 from pyrception.visual.layers.bipolar import BipolarLayer
@@ -24,7 +24,7 @@ from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.ganglion import GanglionLayer
 
 
-class Retina(Logger):
+class Retina(LoggingMixin):
     """
     A retinal layer aims to emulate the full processing pipeline
     of the mammalian retina, from receptors to ganglion cells.
@@ -32,8 +32,8 @@ class Retina(Logger):
 
     def __init__(
         self,
-        source: tp.Union[str, int],
-        shape: tp.Tuple[int, ...],
+        source: str | int,
+        shape: tuple[int, ...],
         saccades: bool = False,
         name: str = "Retina",
         *args,
@@ -43,10 +43,10 @@ class Retina(Logger):
         Retina initialisation.
 
         Args:
-            source (tp.Union[str, int]):
+            source (str | int):
                 Input source.
 
-            shape (tp.Tuple[int, ...]):
+            shape (tuple[int, ...]):
                 Dimensions of the visual field.
 
             saccades (bool, optional):
@@ -166,12 +166,12 @@ class Retina(Logger):
             if file.is_file() and file.suffix in (".png", ".jpg", ".jpeg"):
                 yield iio.imread(file)
 
-    def _read_frame_file(self) -> tp.Tuple[bool, np.ndarray]:
+    def _read_frame_file(self) -> tuple[bool, np.ndarray]:
         """
         Read a frame from a video file.
 
         Returns:
-            tp.Tuple[bool, np.ndarray]:
+            tuple[bool, np.ndarray]:
                 A tuple containing:
                     1. The processing indicator (if the file is still being read from)
                     2. The frame as a NumPy array
@@ -225,7 +225,7 @@ class Retina(Logger):
                 interpolation=cv.INTER_AREA,
             )
 
-        self.frame = self.frame.astype(conf.dtype)
+        self.frame = self.frame.astype(conf.num)
 
         return self.frame
 

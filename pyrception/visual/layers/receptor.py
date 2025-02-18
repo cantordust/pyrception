@@ -8,10 +8,8 @@ import numpy as np
 import math
 
 # --------------------------------------
-import cv2 as cv
-
-# --------------------------------------
 from pyrception import conf
+from pyrception.utils import functions as ptf
 from pyrception.visual import Dim
 from pyrception.visual import Dims
 from pyrception.visual.layers.base import BaseLayer
@@ -31,10 +29,11 @@ class ReceptorLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: tp.Tuple[int, ...],
+        shape: tuple[int, ...],
         scale: float = 1.0,
         saccades: bool = False,
         greyscale: bool = True,
+        log_response: bool = True,
         name: str = "Receptor",
         notifier: tp.Callable = None,
     ):
@@ -43,8 +42,12 @@ class ReceptorLayer(BaseLayer):
         super().__init__(shape, name, notifier)
 
         self.saccades = saccades
+
         # TODO: Connect this to the dimensionality of the input.
         self.greyscale = greyscale
+
+        # Whether the receptors should show a logarithmic response behaviour.
+        self.log_response = log_response
 
         # Dimensionality of the input.
         # The padded version is used for saccades.
@@ -60,12 +63,14 @@ class ReceptorLayer(BaseLayer):
             notifier=notifier,
         )
 
+        self.rfs.cell_coordinates = self.rfs.substrate
+
         # Receptor activation
-        self.activation = None
+        self.membrane = None
 
         self.info("Initialised.")
 
-    def _compute_dimensions(self) -> Dims:
+    def _compute_dimensions(self):
         """
         Compute the dimensions for the input, with optional padding
         if saccades are enabled.
@@ -97,10 +102,10 @@ class ReceptorLayer(BaseLayer):
 
         return dims
 
-    def _pad(
+    def _shift(
         self,
         frame: np.ndarray,
-        padding: tp.Tuple[int, int, int, int],
+        padding: tuple[int, int, int, int],
     ) -> np.ndarray:
         """
         Pad the frame so that we can shift the FOV
@@ -111,7 +116,7 @@ class ReceptorLayer(BaseLayer):
             frame (np.ndarray):
                 Frame to be padded.
 
-            padding (tp.Tuple[int, int, int, int]):
+            padding (tuple[int, int, int, int]):
                 Padding extents in the following order: (left, right, top, bottom).
 
         Returns:
@@ -126,7 +131,7 @@ class ReceptorLayer(BaseLayer):
     def _unpad(
         self,
         tensor: np.ndarray,
-        padding: tp.Tuple[int, int, int, int],
+        padding: tuple[int, int, int, int],
     ) -> np.ndarray:
         """
         Unpad a frame padded with _pad().
@@ -135,7 +140,7 @@ class ReceptorLayer(BaseLayer):
             tensor (np.ndarray):
                 Padded tensor.
 
-            padding (tp.Tuple[int, int, int, int]):
+            padding (tuple[int, int, int, int]):
                 Padding extents in the following order: (left, right, top, bottom).
 
         Returns:
@@ -248,17 +253,22 @@ class ReceptorLayer(BaseLayer):
 
         return tensor.reshape(width, height)
 
-    def _get_padding(
+    def _shift(
         self,
+        frame: np.ndarray,
         height_offset: float = 0.0,
         width_offset: float = 0.0,
-    ) -> tp.Tuple[int, ...]:
+    ) -> tuple[int, ...]:
         """
-        Compute the horizontal and vertical offsets
-        from the width and height offset values and
-        then compute the padding values from the offsets.
+        Computes the horizontal and vertical offsets
+        from the width and height offset values,
+        then computes the padding values from the offsets
+        and shifts the frame by that amount.
 
         Args:
+            frame (np.ndarray):
+                The frame to be shifted.
+
             height_offset (float, optional):
                 Offset to move in the height direction. Defaults to 0.0.
 
@@ -266,8 +276,8 @@ class ReceptorLayer(BaseLayer):
                 Offset to move in the width direction. Defaults to 0.0.
 
         Returns:
-            tp.Tuple[int, ...]:
-                Padding extents in the following order: (left, right, top, bottom).
+            np.ndarray:
+                The patch corresponding to the shifted frame.
         """
 
         # TODO
@@ -284,9 +294,17 @@ class ReceptorLayer(BaseLayer):
             * math.floor(math.fabs(height_offset) * self.dims.original.height)
         )
 
+        # Padding extents in the following order: (left, right, top, bottom).
         padding = tuple(self.dims.padding + np.array([hpo, -hpo, wpo, -wpo]).tolist())
 
-        return padding
+        frame = np.pad(frame, padding)
+
+        patch = frame[
+            padding[2] : -padding[3],
+            padding[0] : -padding[1],
+        ]
+
+        return patch
 
     def _make_flatmask(self) -> np.ndarray:
         """
@@ -305,7 +323,7 @@ class ReceptorLayer(BaseLayer):
 
         self.debug("Creating flatmask...")
 
-        probs = np.zeros(self.shape, dtype=conf.dtype)
+        probs = np.zeros(self.shape, dtype=conf.num)
 
         r_prob = 0.475
         g_prob = 0.475
@@ -315,14 +333,15 @@ class ReceptorLayer(BaseLayer):
         probs[:, :, 1] = g_prob  # G channel
         probs[:, :, 2] = b_prob  # B channel
 
-        # ohc = np.random.choice(self.shape, n, p=r_prob)
+        ohc = np.random.choice(self.shape, n, p=r_prob)
 
         return ohc.sample()
 
     def forward(
         self,
         frame: np.ndarray,
-        offset: tp.Optional[tp.Tuple[float, float]] = None,
+        offset: tuple[float, float] | None = None,
+        dt: float | None = None,
     ) -> np.ndarray:
         """
         Read the input and apply a certain offset if saccades are enabled.
@@ -331,29 +350,28 @@ class ReceptorLayer(BaseLayer):
             frame (np.ndarray):
                 The raw input.
 
-            offset (tp.Optional[tp.Tuple[float, float]], optional):
+            offset (tuple[float, float] | None, optional):
                 Padding for saccades. Defaults to None.
 
+            dt (float | None, optional):
+                In the case of temporal integration,
+                indicates the time since the last input.
+                Defaults to None.
+
         Returns:
-            np.ndarray:
+            tuple[np.ndarray, float]:
                 The frame with optional padding (for saccades).
         """
 
+        # Saccades
         if offset is not None:
-            # This is where saccades happen!
+            frame = self._shift(frame, offset[0], offset[1])
 
-            # WIP
-            # This needs to be revised because the frame
-            # needs to be unrolled properly.
-            # ==================================================
-            padding = self._get_padding(offset[0], offset[1])
-            frame = ptf.pad(frame, padding)
+        # Log response
+        if self.log_response:
+            frame = np.log1p(frame)
 
-            patch = frame[
-                padding[2] : -padding[3],
-                padding[0] : -padding[1],
-            ]
+        # Activation
+        self.membrane = frame.flatten()
 
-        self.activation = frame.flatten()
-
-        return self.activation
+        return self.membrane

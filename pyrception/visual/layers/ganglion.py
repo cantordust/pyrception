@@ -1,3 +1,4 @@
+# --------------------------------------
 import typing as tp
 
 # --------------------------------------
@@ -5,9 +6,6 @@ import numpy as np
 
 # --------------------------------------
 import skimage as ski
-
-# --------------------------------------
-import matplotlib.pyplot as plt
 
 # --------------------------------------
 from pyrception.visual.layers.bipolar import BipolarLayer
@@ -24,16 +22,34 @@ class GanglionLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: tp.Tuple[int, ...],
+        shape: tuple[int, ...],
         bipolar: BipolarLayer,
         amacrine: AmacrineLayer,
         sectors: int = 64,
         name: str = "Ganglion",
-        inhibition_scale: float = 1.0,
-        bipolar_params: tp.Dict[str, tp.Any] = None,
-        amacrine_params: tp.Dict[str, tp.Any] = None,
+        inhibition_scale: float = 1,
+        bipolar_params: dict[str, tp.Any] = None,
+        amacrine_params: dict[str, tp.Any] = None,
+        tau: float | np.ndarray = 1.0,
+        threshold: float | np.ndarray = 0.5,
         notifier: tp.Callable = None,
     ):
+        """
+        _summary_
+
+        Args:
+            shape (tuple[int, ...]): _description_
+            bipolar (BipolarLayer): _description_
+            amacrine (AmacrineLayer): _description_
+            sectors (int, optional): _description_. Defaults to 64.
+            name (str, optional): _description_. Defaults to "Ganglion".
+            inhibition_scale (float, optional): _description_. Defaults to 2.
+            bipolar_params (dict[str, tp.Any], optional): _description_. Defaults to None.
+            amacrine_params (dict[str, tp.Any], optional): _description_. Defaults to None.
+            tau (float | np.ndarray, optional): _description_. Defaults to 1.0.
+            threshold (float | np.ndarray, optional): _description_. Defaults to 0.0.
+            notifier (tp.Callable, optional): _description_. Defaults to None.
+        """
 
         # Initialise the base
         super().__init__(shape, name, notifier)
@@ -68,36 +84,59 @@ class GanglionLayer(BaseLayer):
         self.amacrine_rfs.make_rfs()
         self.inhibition_scale = inhibition_scale
 
+        self.tau = tau
+        self.tau_inv = 1 / tau
+        self.membrane = np.zeros((self.bipolar_rfs.neuron_count,))
+        self.spikes = np.zeros_like(self.membrane)
+        self.threshold = threshold
+
         self.info("Initialised.")
 
-    def forward(self):
+    def update_state(
+        self,
+        current: np.ndarray,
+        dt: float | None = None,
+    ):
+        self.membrane *= (
+            0.0 if dt is None else (self.tau_inv * np.exp(-self.tau_inv * dt))
+        )
+        self.membrane += current
+
+    def forward(
+        self,
+        dt: float | None = None,
+    ) -> np.ndarray:
         """
-        Compute the activation of ON/OFF and OFF/ON RGCs.
+        Compute the activation of center/surround RGCs.
 
         This is where spikes are produced.
+
+        Args:
+
+            dt (float | None, optional):
+                In the case of temporal integration,
+                indicates the time since the last input.
+                Defaults to None.
+
+        Returns:
+            np.ndarray:
+                A spike array.
         """
 
         # ON centre / OFF surround
-        on_off = self.convolve(
+        current = self.convolve(
             self.bipolar_rfs.forward_synapses,
-            self.bipolar.on,
+            self.bipolar.membrane,
         ) - self.inhibition_scale * self.convolve(
             self.amacrine_rfs.forward_synapses,
-            self.amacrine.off,
+            self.amacrine.membrane,
         )
-        on_off_spikes = np.where(on_off >= 0, 1, 0)
 
-        # OFF centre / ON surround
-        off_on = self.convolve(
-            self.bipolar_rfs.forward_synapses,
-            self.bipolar.off,
-        ) - self.inhibition_scale * self.convolve(
-            self.amacrine_rfs.forward_synapses,
-            self.amacrine.on,
-        )
-        off_on_spikes = np.where(off_on >= 0, 1, 0)
+        self.update_state(current, dt)
 
-        return (on_off_spikes, off_on_spikes)
+        self.spikes = np.where(self.membrane >= self.threshold, 1, 0)
+
+        return self.spikes
 
     def plot_rfs(
         self,
@@ -105,7 +144,7 @@ class GanglionLayer(BaseLayer):
         amacrine_rf_colour: str = "#ffff00",
         *args,
         **kwargs,
-    ) -> tp.Tuple[plt.Figure, plt.Axes, tp.List, np.ndarray]:
+    ) -> np.ndarray:
         """
         Plot the receptive fields of amacrine cells.
         This takes into account the sparsity of bipolar cells.
@@ -119,19 +158,13 @@ class GanglionLayer(BaseLayer):
                 The colour to use for highlighting the plotted amacrine cells.
 
         Returns:
-            tp.Tuple[plt.Figure, plt.Axes, tp.List]:
-                A tuple containing:
-                    1. A Figure object.
-                    2. An Axes object.
-                    3. A list of mappables (which can be used for animations).
-                    4. The canvas.
+            np.ndarray:
+                A plot of the receptive fields of the cells.
 
         """
 
-        kwargs.setdefault("title", "Ganglion layer receptive fields")
-
         # Plot the bipolar cells
-        (fig, axes, _, bl_canvas) = self._plot_rfs(
+        bl_canvas = self._plot_rfs(
             self.bipolar_rfs,
             rf_colour=bipolar_rf_colour,
             *args,
@@ -139,16 +172,14 @@ class GanglionLayer(BaseLayer):
         )
 
         # Plot the amacrine cells
-        (fig, axes, _, al_canvas) = self._plot_rfs(
+        al_canvas = self._plot_rfs(
             self.amacrine_rfs,
             rf_colour=amacrine_rf_colour,
-            fig=fig,
-            axes=axes,
             *args,
             **kwargs,
         )
 
-        canvas = (bl_canvas + al_canvas)
+        canvas = bl_canvas + al_canvas
         canvas /= canvas.max()
 
-        return (fig, axes, _, canvas)
+        return canvas

@@ -4,13 +4,17 @@ import typing as tp
 import numpy as np
 
 # --------------------------------------
-from pyrception.conf import logger
-from pyrception.visual.utils.types import KernelFilter
+import skimage as ski
+
+# --------------------------------------
+from pyrception import logger
 from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.layers.horizontal import HorizontalLayer
 from pyrception.visual.rf import ReceptiveFields
-from pyrception.visual.utils.types import RFArrangement
+from pyrception.utils.types import KernelFilter
+from pyrception.utils.types import RFArrangement
+
 
 class BipolarLayer(BaseLayer):
     """
@@ -21,18 +25,19 @@ class BipolarLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: tp.Tuple[int, ...],
+        shape: tuple[int, ...],
         receptor: ReceptorLayer,
         horizontal: HorizontalLayer,
         sectors: int = 64,
         name: str = "Bipolar",
-        forgetting_range: tp.Tuple[float, float] = (0.05, 0.95),
-        rf_params: tp.Dict[str, tp.Any] = None,
+        forgetting_range: tuple[float, float] = (0.05, 0.95),
+        rf_params: dict[str, tp.Any] = None,
         notifier: tp.Callable = None,
     ):
 
         # Initialise the base
         super().__init__(shape, name, notifier)
+
         self.receptor = receptor
         self.horizontal = horizontal
 
@@ -49,21 +54,26 @@ class BipolarLayer(BaseLayer):
         )
         self.rfs.make_rfs()
 
-        # Temporal exponential running mean
-        self.mean = np.zeros((self.rfs.neuron_count,))
+        # Temporal mean (exponential running mean).
+        # We initialise this to None because it is initialised
+        # with the mean of the first activation map.
+        self.membrane = None
 
+        # Range of forgetting rates
         self.forgetting_range = forgetting_range
 
         # 'Forgetting rate' for the temporal mean
-        self.alpha = self._compute_forgetting_rate()
+        self.alpha = self.compute_forgetting_rate()
 
-        # Activations for the ON and OFF pathways
-        self.on = np.zeros((self.rfs.neuron_count,))
-        self.off = np.zeros_like(self.on)
+        # Membrane potential
+        self.membrane = np.zeros((self.rfs.neuron_count,))
+
+        # Low-pass filter
+        self.mean = None
 
         self.info("Initialised.")
 
-    def _compute_forgetting_rate(self):
+    def compute_forgetting_rate(self):
         hr = self.rfs.cell_coordinates[:, 0] - self.rfs.height // 2
         wr = self.rfs.cell_coordinates[:, 1] - self.rfs.width // 2
 
@@ -82,35 +92,42 @@ class BipolarLayer(BaseLayer):
 
         return alpha
 
-    def forward(self) -> tp.Tuple[np.ndarray, ...]:
+    def _compute_membrane_potential(self, activation: np.ndarray,):
+
+        self.membrane = np.clip(activation - self.mean, min=0.0)
+
+
+    def forward(
+        self,
+        dt: float | None = None,
+    ) -> np.ndarray:
         """
         The bipolar layer splits the input into ON and OFF pathways.
 
         Returns:
-            tp.Tuple[np.ndarray, ...]:
-                A tuple containing:
-                    1. The activation of ON bipolar cells.
-                    2. The activation of OFF bipolar cells.
-                    3. The scaled signal (raw input signal sans feedback from the horizontal cells).
-                    4. The raw (postsynaptic) activation of the bipolar cells.
+            np.ndarray:
+                The membrane potential of bipolar cells.
         """
 
-        # Subtract the raw photoreceptor signal
-        # from the horizontal feedback signal
-        scaled_signal = self.receptor.activation - self.horizontal.feedback
+        # Take the difference of the raw receptor input and
+        # the spatial mean as computed by the horizontal cells.
+        scaled_input = self.receptor.membrane - self.horizontal.feedback
 
         # Compute the nominal activation for each bipolar cell
-        activation = self.convolve(self.rfs.forward_synapses, scaled_signal)
+        activation = self.convolve(self.rfs.forward_synapses, scaled_input)
 
-        # Compute the on and off activations
-        diff = activation - self.mean
-        self.on = np.log1p(np.where(diff > 0, diff, 0))
-        self.off = np.log1p(np.where(diff < 0, -diff, 0))
+        # The filter implemented by the bipolar cell is
+        # a temporal exponential running mean of the activation.
+        # The membrane potential is computed as a rectified
+        # version of the deviation from that mean.
+        # ==================================================
+        if self.mean is None:
+            self.mean = activation.mean()
+        else:
+            self.mean += self.alpha * activation
+        self._compute_membrane_potential(activation)
 
-        # Update the running mean (low-pass filter)
-        self.mean += self.alpha * diff
-
-        return (self.on, self.off, scaled_signal, activation)
+        return self.membrane
 
     def plot_rfs(
         self,
@@ -118,5 +135,4 @@ class BipolarLayer(BaseLayer):
         **kwargs,
     ):
 
-        kwargs.setdefault("title", "Bipolar layer receptive fields")
         return self._plot_rfs(self.rfs, *args, **kwargs)

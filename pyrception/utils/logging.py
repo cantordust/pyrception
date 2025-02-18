@@ -1,11 +1,12 @@
 # --------------------------------------
-import typing as tp
+from typing import Callable
 
 # --------------------------------------
 from pyrception import conf
+from pyrception import logger
 
 
-class Logger:
+class LoggingMixin:
     """
     Auxiliary class containing methods for logging.
     """
@@ -13,7 +14,7 @@ class Logger:
     def __init__(
         self,
         source: str,
-        notifier: tp.Callable = None,
+        notifier: Callable = None,
     ):
         """
         A simple class that takes care of logging and notifications.
@@ -23,18 +24,21 @@ class Logger:
                 The source of the message (usually a layer instance).
 
             notifier (tp.Callable):
-                A progress notification function
+                A notification function (used for the GUI).
         """
 
         self.source = source
-        self.notifier = notifier
+        if notifier is None:
+            self.notifier = lambda m, v: None
+        else:
+            self.notifier = self.notify
 
     def notify(
         self,
         message: str,
         value: int = 0,
     ):
-        '''
+        """
         Send an optional notification via a callback.
 
         Args:
@@ -43,7 +47,7 @@ class Logger:
 
             value (int, optional):
                 Progress indicator. Defaults to 0.
-        '''
+        """
 
         if self.notifier is not None:
             self.notifier(message, value)
@@ -63,7 +67,7 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.trace(f"{self.source} | {message}")
+        logger.trace(f"{self.source} | {message}")
         self.notify(message, value)
 
     def debug(
@@ -81,7 +85,7 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.debug(f"{self.source} | {message}")
+        logger.debug(f"{self.source} | {message}")
         self.notify(message, value)
 
     def info(
@@ -99,7 +103,7 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.info(f"{self.source} | {message}")
+        logger.info(f"{self.source} | {message}")
         self.notify(message, value)
 
     def success(
@@ -117,7 +121,7 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.success(f"{self.source} | {message}")
+        logger.success(f"{self.source} | {message}")
         self.notify(message, value)
 
     def warning(
@@ -135,7 +139,7 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.warning(f"{self.source} | {message}")
+        logger.warning(f"{self.source} | {message}")
         self.notify(message, value)
 
     def error(
@@ -153,7 +157,7 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.error(f"{self.source} | {message}")
+        logger.error(f"{self.source} | {message}")
         self.notify(message, value)
 
     def critical(
@@ -171,5 +175,5 @@ class Logger:
             value (int, optional):
                 Progress indicator. Defaults to 0.
         """
-        conf.logger.critical(f"{self.source} | {message}")
+        logger.critical(f"{self.source} | {message}")
         self.notify(message, value)

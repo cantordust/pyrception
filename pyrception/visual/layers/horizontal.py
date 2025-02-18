@@ -16,23 +16,25 @@ class HorizontalLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: tp.Tuple[int, ...],
+        shape: tuple[int, ...],
         receptor: ReceptorLayer,
         sectors: int = 32,
         name: str = "Horizontal",
-        rf_params: tp.Dict[str, tp.Any] = None,
+        rf_params: dict[str, tp.Any] = None,
         notifier: tp.Callable = None,
     ):
 
         # Initialise the base
         super().__init__(shape, name, notifier)
+
+
         self.receptor = receptor
 
         # Initialise the receptive fields.
         if rf_params is None:
             rf_params = {}
         rf_params.setdefault("name", f"{name} | Receptive fields")
-        rf_params.setdefault("create_feedback", True)
+        rf_params.setdefault("feedback", True)
         self.rfs = ReceptiveFields(
             self.shape,
             receptor.rfs.cell_coordinates,
@@ -50,13 +52,18 @@ class HorizontalLayer(BaseLayer):
 
         self.info("Initialised.")
 
-    def forward(self):
+    def forward(
+        self,
+        dt: float | None = None,
+    ) -> tuple[np.ndarray, ...]:
 
         # Compute the activation of the horizontal cells
-        self.activation = self.convolve(self.rfs.forward_synapses, self.receptor.activation)
+        self.activation = self.convolve(
+            self.rfs.forward_synapses, self.receptor.membrane
+        )
 
-        # The feedback signal (spatial mean) fed
-        # back to the receptors.
+        # The feedback signal (spatial mean) that can be
+        # sent back to the receptors
         # ==================================================
         self.feedback = self.convolve(self.rfs.feedback_synapses, self.activation)
 
@@ -68,5 +75,4 @@ class HorizontalLayer(BaseLayer):
         **kwargs,
     ):
 
-        kwargs.setdefault("title", "Horizontal layer receptive fields")
         return self._plot_rfs(self.rfs, *args, **kwargs)
