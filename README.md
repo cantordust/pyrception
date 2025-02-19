@@ -1,7 +1,7 @@
 # Overview
-Pyrception aims to serve as a simulation and conversion framework for different perceptual modalities. Currently, it supports simulation of visual pathways of the mammalian retina, but the goal is to incorporate other modalities as well, such as auditory, olfactory and so forth. It can also serve as an input conversion library for encoding raw multimodal sensory input into a uniform spike train suitable for processing with spiking neural networks.
+Pyrception is a simulation framework for biorealistic simulation of perceptual modalities. Currently, it supports visual pathways of the mammalian retina, but the long-term goal is to support modalities such as auditory, olfactory and so forth. It can also serve as an input conversion library for encoding raw multimodal sensory input into a uniform spike train suitable for processing with spiking neural networks.
 
-At this stage, only the visual package is implemented. The auditory and olfactory packages are work in progress. Contributions are welcome in case you would like to help with the implementation of these modalities!
+Contributions are welcome, especially for the implementation of modalities other than vision.
 
 ## Installation
 
@@ -17,22 +17,9 @@ pip install pyrception
 
 Clone the repository and install it (optionally in in development mode):
 
-=== "HTTPS"
-
-    ``` shell
-    git clone https://github.com/cantordust/pyrception.git
-    ```
-
-=== "Git+SSH"
-
-    ``` shell
-    git clone git@github.com:cantordust/pyrception.git
-    ```
-
 ``` shell
+git clone git@github.com:cantordust/pyrception.git
 cd pyrception
-```
-``` shell
 pip install -e .
 ```
 
