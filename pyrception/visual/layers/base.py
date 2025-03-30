@@ -118,7 +118,7 @@ class BaseLayer(LoggingMixin):
         rfs: Any,
         cells: list[int] | tuple[int] = None,
         cell_colour: tuple[str, tuple[int, ...]] = "#00ffff",
-        rf_colour: tuple[str, tuple[int, ...]] = "#ff00ff",
+        rf_colour: tuple[str, tuple[int, ...]] = "#ffffff",
         weighted: bool = False,
     ) -> figure:
         """
@@ -176,6 +176,9 @@ class BaseLayer(LoggingMixin):
                     rfs.kernels[c].coordinates[:, 0],
                     rfs.kernels[c].coordinates[:, 1],
                 ] += colour
+                canvas = np.clip(canvas, max=5)
+
+        canvas = ski.exposure.rescale_intensity(canvas, out_range=(0, 1))
 
         # Plot the cells last so that they are superimposed
         # on top of the receptive fields.
@@ -185,11 +188,9 @@ class BaseLayer(LoggingMixin):
                 canvas[
                     rfs.cell_coordinates[c, 0],
                     rfs.cell_coordinates[c, 1],
-                ] = (
-                    cell_colour * canvas.max() / 3
-                )
+                ] = cell_colour
 
-        return ski.exposure.rescale_intensity(canvas, out_range=(0, 1))
+        return canvas
 
     def convolve(
         self,

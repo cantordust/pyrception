@@ -21,10 +21,12 @@ from bokeh.plotting import curdoc
 from skimage.exposure import rescale_intensity
 
 # --------------------------------------
+import pyrception as pcp
 import pyrception.utils.functions as pcf
 from pyrception.utils.functions import is_notebook
 
 if is_notebook():
+    pcp.logger.info("Running inside a notebook.")
     output_notebook()
 curdoc().theme = "dark_minimal"
 
@@ -182,6 +184,7 @@ class Plotter:
         # for an image, such as the grid and the border.
         p.x_range.range_padding = 0
         p.y_range.range_padding = 0
+        p.toolbar.autohide = True
         p.axis.visible = False
         p.grid.visible = False
         p.min_border = 2
@@ -258,6 +261,8 @@ class Plotter:
             logo=logo,
             title_style=title_style,
         )
+
+        p.toolbar.autohide = True
 
         if xs is None:
             xs = np.arange(len(ys))
