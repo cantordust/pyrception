@@ -23,13 +23,15 @@ Please refer to the [documentation](#documentation), which contains a [step-by-s
 
 ## Documentation
 
-To generate the documentation, run the MkDocs build pipeline:
+To generate the documentation, run the MkDocs build pipeline. Note that to build and view the documentation locally, you have to install `pyrception` from GitHub with the optional `docs` modifier:
 
 ```shell
+pip install -e .[dev]
+cd docs
 mkdocs build
 ```
 
-To view the documentation locally, start the MkDocs server:
+Then, to view the documentation locally, start the MkDocs server:
 
 ```shell
 mkdocs serve
