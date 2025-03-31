@@ -1,3 +1,5 @@
+[![PyPI - Version](https://img.shields.io/pypi/v/pyrception)](https://pypi.org/project/pyrception/)
+
 # Overview
 Pyrception is a simulation framework for bio-plausible simulation of perceptual modalities. Currently, it supports visual pathways of the mammalian retina, but the long-term goal is to support modalities such as auditory, olfactory and so forth. It can also serve as an input conversion library for encoding raw multimodal sensory input into a uniform spike train suitable for processing with spiking neural networks.
 
