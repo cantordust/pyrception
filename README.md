@@ -5,13 +5,13 @@ Pyrception is a simulation framework for bio-plausible simulation of perceptual 
 
 You can install Pyrception from PyPI:
 
-```bash
+```shell
 pip install pyrception
 ```
 
 or directly from GitHub (optionally in development mode):
 
-```console
+```shell
 git clone git@github.com:cantordust/pyrception.git
 cd pyrception
 pip install -e .
