@@ -22,7 +22,7 @@ pip install -e .
 
 ## Usage
 
-Please refer to the [documentation](#documentation), which contains a [step-by-step notebook](docs/docs/notebooks/image.ipynb) demonstrating how to use `pyrception` with a static image. More notebooks are currently being developed, including frame-based RGB input and sparse event input from an event camera. Watch this space.
+Please refer to the [documentation](https://pyrception.readthedocs.io/en/latest/), which contains a [step-by-step notebook](https://pyrception.readthedocs.io/en/latest/notebooks/image/) demonstrating how to use `pyrception` with a static image. More notebooks are currently being developed, including frame-based RGB input and sparse event input from an event camera. Watch this space.
 
 ## Documentation
 
