@@ -56,9 +56,9 @@ Since in the case of digital visual input the convolution operation is discrete,
 The same operation is performed with all kernels -- they are unrolled and concatenated as the _rows_ of a separate dense matrix (Fig. \ref{fig:convolution}b).
 This operation reduces the convolution operation to a simple dense matrix-matrix multiplication.
 
-While the `Im2Col` approach makes the convolution operation very well suited for implementation on GPUs, it has multiple limitations
+While the `Im2Col` approach makes the convolution operation well suited for implementation on GPUs, it has several limitations
 that make it unsuitable for modelling the working principle of the retina. For instance, `Im2Col` requires that all kernels be of the same size,
-precluding the emulation of eccentricity-dependent receptive field sizes. Similarly, it makes it exceedingly difficult to implement non-rectangular
+precluding the emulation of log-polar dependent receptive field architecture. Similarly, it makes it exceedingly difficult to implement non-rectangular
 (e.g., elliptic or irregular) kernels.
 
 In contrast, in `Pyrception` the image is not segmented into patches. Instead, it is unrolled into a single long vector by concatenating all
