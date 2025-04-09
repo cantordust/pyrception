@@ -1,4 +1,4 @@
-name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
+name: Publish Python distribution to PyPI
 
 on:
   release:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    name: Build distribution 📦
+    name: Build distribution
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,7 @@ jobs:
 
   publish-to-pypi:
     name: >-
-      Publish Python 🐍 distribution 📦 to PyPI
+      Publish Python distribution to PyPI
     needs:
       - build
     runs-on: ubuntu-latest
@@ -46,5 +46,5 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
-      - name: Publish distribution 📦 to PyPI
+      - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
