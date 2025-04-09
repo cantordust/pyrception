@@ -30,9 +30,9 @@ bibliography: references.bib
 Neuromorphic perception is enjoying a resurgence in attention from the scientific community
 as event-driven cameras (EDs) [@Lichtsteiner2008] become increasingly capable and commercially available [@PoschEtAl_2014_Retinomorphic].
 EDs build upon decades of research on retinomorphic vision, display superior
-characteristics compared to frame-based cameras (FCs) and highlight the advantages of neuromorphic perception.
+characteristics in latency (microseconds) and power consumption (mWs to few Ws) compared to frame-based cameras (FCs) and highlight the advantages of neuromorphic perception.
 Here, we present `Pyrception` -- a Python library for the retinal bio-plausible modelling, simulation and processing
-of raw visual input. The library builds upon a generalisation of sparse convolution using Toeplitz matrices
+of raw visual input, aimed at extending and enhancing bioinspired visual processing architectures. The library builds upon a generalisation of sparse convolution using Toeplitz matrices
 (outlined below), which allows for efficient processing and modelling of various features of the mammalian retina, such as
 complex receptive fields, eccentricity-dependent receptive field sizes and log-polar cell arrangement [@chessa2016space].
 
