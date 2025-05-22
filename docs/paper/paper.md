@@ -50,7 +50,7 @@ modelling atypical or poorly understood visual mechanisms to gain insight into t
 
 # Implementation
 
-The implemention of convolution in deep learning libraries such as [PyTorch](https://pytorch.org/) [@paszke2017automatic]
+The implemention of convolution in deep learning libraries such as [PyTorch](https://pytorch.org/) [@Paszke_2019_PyTorchImperative]
 and [TensorFlow](https://www.tensorflow.org/) [@tensorflow2015-whitepaper] is based on the `Im2Col` mechanism [@ChellapillaEtAl_2006_HighPerformance].
 Since in the case of digital visual input the convolution operation is discrete, in the `Im2Col` approach the input (an image) is partitioned into patches corresponding to each convolved location, which is determined by factors such as kernel size, stride, dilation and so forth. Each of these patches is unrolled into a column vector and concatenated to form the columns of a dense matrix, hence the term `Im2Col` (Fig. \ref{fig:convolution}a).
 The same operation is performed on all kernels -- they are unrolled and concatenated as the _rows_ of a separate dense matrix (Fig. \ref{fig:convolution}b).
