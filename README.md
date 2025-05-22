@@ -43,7 +43,6 @@ mkdocs serve
 # ToDo
 
 ## Short-term
-### Visual package
 - [X] All major types of retinal cells.
     - [X] Receptors (raw input, Weber's law).
     - [X] Horizontal cells (mean local brightness, normalising feedback).
@@ -57,13 +56,11 @@ mkdocs serve
 - [ ] Colour vision (with colour opponency) [WIP].
 - [ ] Temporal dynamics [WIP].
 - [ ] Events as input [WIP].
+- [ ] Automated testing (using `pytest`) [WIP].
 
-### Auditory package
-WIP.
+## Mid-term
+- [ ] Other sensory modalities (help needed!)
 
-### Olfactory package
-WIP.
-
-### Overall functionality
+## Overall functionality
 - [WIP] Support alternative backends for sparse matrix operations ([CuPy](https://cupy.dev/), [PyTorch](https://pytorch.org/docs/stable/sparse.html), [Sparse](https://sparse.pydata.org/en/stable/)).
 - [ ] Interfacing with (neuromorphic) hardware, such as event cameras.
