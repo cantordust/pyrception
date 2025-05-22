@@ -6,20 +6,22 @@ nav:
       - Modules:
           - Visual:
             - Layers:
-                - Receptor: source/visual/layers/receptor.md
-                - Horizontal: source/visual/layers/horizontal.md
-                - Bipolar: source/visual/layers/bipolar.md
-                - Amacrine: source/visual/layers/amacrine.md
-                - Ganglion: source/visual/layers/ganglion.md
-            - Retina: source/visual/retina.md
-            - Receptive fields: source/visual/rf.md
-          - Utils: source/visual/utils.md
-      - Utils: source/utils.md
+                - Receptor: api/visual/layers/receptor.md
+                - Horizontal: api/visual/layers/horizontal.md
+                - Bipolar: api/visual/layers/bipolar.md
+                - Amacrine: api/visual/layers/amacrine.md
+                - Ganglion: api/visual/layers/ganglion.md
+            - Retina: api/visual/retina.md
+            - Receptive fields: api/visual/rf.md
+          - Utils: api/visual/utils.md
+      - Utils: api/utils.md
       - Configuration:
-         - Settings: source/conf/settings.md
-         - Components: source/conf/components.md
+         - Settings: api/conf/settings.md
+         - Components: api/conf/components.md
   - Examples:
       - Image: notebooks/image.ipynb
+docs_dir: source
+site_dir: site
 theme:
   name: material
   palette:

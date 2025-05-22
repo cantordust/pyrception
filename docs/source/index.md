@@ -38,7 +38,7 @@ pip install -e .
 
 ## Usage
 
-Please refer to the [documentation](#documentation), which contains a [step-by-step notebook](docs/docs/notebooks/image.ipynb) demonstrating how to use `pyrception` with a static image. More notebooks are currently being developed, including frame-based RGB input and sparse event input from an event camera. Watch this space.
+Please refer to the [documentation](https://pyrception.readthedocs.io/), which contains a [step-by-step notebook](https://pyrception.readthedocs.io/en/latest/notebooks/image/) demonstrating how to use `pyrception` with a static image. More notebooks are currently being developed, including frame-based RGB input and sparse event input from an event camera. Watch this space.
 
 ## Documentation
 
@@ -59,7 +59,6 @@ mkdocs serve
 # ToDo
 
 ## Short-term
-### Visual package
 - [X] All major types of retinal cells.
     - [X] Receptors (raw input, Weber's law).
     - [X] Horizontal cells (mean local brightness, normalising feedback).
@@ -73,13 +72,11 @@ mkdocs serve
 - [ ] Colour vision (with colour opponency) [WIP].
 - [ ] Temporal dynamics [WIP].
 - [ ] Events as input [WIP].
+- [ ] Automated testing (using `pytest`) [WIP].
 
-### Auditory package
-WIP.
+## Mid-term
+- [ ] Other sensory modalities (help needed!)
 
-### Olfactory package
-WIP.
-
-### Overall functionality
+## Overall functionality
 - [WIP] Support alternative backends for sparse matrix operations ([CuPy](https://cupy.dev/), [PyTorch](https://pytorch.org/docs/stable/sparse.html), [Sparse](https://sparse.pydata.org/en/stable/)).
 - [ ] Interfacing with (neuromorphic) hardware, such as event cameras.
