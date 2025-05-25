@@ -14,17 +14,17 @@ def array_validator(
     Validate an array
 
     Args:
-        value (Any):
+        value:
             The value to be validated.
 
-        min_len (int, optional):
-            The minimal length. Defaults to 2.
+        min_len:
+            The minimal length.
 
-        max_len (int, optional):
-            The maximal length. Defaults to 2.
+        max_len:
+            The maximal length.
 
-        dtype (np.dtype, optional):
-            The data type for the resulting array. Defaults to np.int32.
+        dtype:
+            The data type for the resulting array.
 
     Raises:
         TypeError:

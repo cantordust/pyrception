@@ -34,17 +34,17 @@ class Retina(LoggingMixin):
         Retina initialisation.
 
         Args:
-            source (str | int):
+            source:
                 Input source.
 
-            shape (tuple[int, ...]):
+            shape:
                 Dimensions of the visual field.
 
-            saccades (bool, optional):
-                Toggle for saccadic movements. Defaults to False.
+            saccades:
+                Toggle for saccadic movements.
 
-            name (str, optional):
-                Layer name. Defaults to "Retina".
+            name:
+                Layer name.
 
         Raises:
             ValueError:
@@ -148,8 +148,7 @@ class Retina(LoggingMixin):
         Iterate over a collection of image files.
 
         Yields:
-            np.ndarray:
-                Frame as a NumPy array.
+            Frame as a NumPy array.
         """
 
         for file in sorted(self.src_path.iterdir()):
@@ -161,10 +160,9 @@ class Retina(LoggingMixin):
         Read a frame from a video file.
 
         Returns:
-            tuple[bool, np.ndarray]:
-                A tuple containing:
-                    1. The processing indicator (if the file is still being read from)
-                    2. The frame as a NumPy array
+            A tuple containing:
+                1. The processing indicator (if the file is still being read from)
+                2. The frame as a NumPy array
         """
 
         try:
@@ -181,13 +179,12 @@ class Retina(LoggingMixin):
         probe: tp.Optional[bool] = False,
     ):
         """
-        _summary_
+        Retrieve a frame.
 
         Args:
-            probe (tp.Optional[bool], optional): _description_. Defaults to False.
-
-        Returns:
-            _type_: _description_
+            probe:
+                If True, only probe the source for metadata.
+                Likely obsolete, to be deprecated.
         """
 
         # Get the current frame

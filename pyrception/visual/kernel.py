@@ -111,11 +111,8 @@ class Kernel(LoggingMixin):
         arrangement of input cells in the substrate.
 
         Args:
-            index_map (np.ndarray):
-                A 2D array containing the indices of each cell in the substrate.
-
-            substrate (np.ndarray):
-                The input substrate.
+            index_map: A 2D array containing the indices of each cell in the substrate.
+            substrate: The input substrate.
         """
 
         # Indices

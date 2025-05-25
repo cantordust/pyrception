@@ -10,9 +10,6 @@ from typing import Any
 
 from pyrception.utils.logging import LoggingMixin
 
-# from pyrception.visual import ReceptiveFields
-# from pyrception.visual.utils.types import ImagePlot
-
 
 class BaseLayer(LoggingMixin):
     """
@@ -54,12 +51,11 @@ class BaseLayer(LoggingMixin):
         TODO: Move this into the `utils` module.
 
         Args:
-            container (Iterable):
+            container:
                 A container or a numeric value.
 
         Returns:
-            np.ndarray:
-                A NumPy array.
+            A NumPy array.
         """
         array = []
         if isinstance(container, (int, float)):
@@ -83,12 +79,11 @@ class BaseLayer(LoggingMixin):
         TODO: Move this into the `utils` module.
 
         Args:
-            colour (str | Iterable):
+            colour:
                 The colour specified as a HEX string or an iterable.
 
         Returns:
-            np.ndarray:
-                The RGBA values of the colour.
+            The RGBA values of the colour.
         """
         if colour is not None:
             if isinstance(colour, str):
@@ -114,23 +109,20 @@ class BaseLayer(LoggingMixin):
 
         Args:
 
-            rfs: (ReceptiveFields):
+            rfs:
                 Receptive fields to plot.
 
-            cells (list[int] | tuple[int], optional):
-                Coordinates of the cells to plot. Defaults to None.
+            cells:
+                Coordinates of the cells to plot.
 
-            cell_colour (tuple[str, tuple[int, ...]], optional):
+            cell_colour:
                 The colour to use for highlighting the plotted cells.
-                Defaults to "#00ffff".
 
-            rf_colour (tuple[str, tuple[int, ...]], optional):
+            rf_colour:
                 The colour to use for highlighting the plotted receptive field.
-                Defaults to "#ff00ff".
 
         Returns:
-            np.ndarray:
-                A visualisation of the receptive fields.
+            A visualisation of the receptive fields.
         """
         # Bipolar cell input for a single amacrine cell
         canvas = np.zeros((rfs.height, rfs.width, 3))
@@ -187,12 +179,11 @@ class BaseLayer(LoggingMixin):
         Convolve the unrolled input vector with the current layer's receptive field.
 
         Args:
-            frame (np.ndarray):
+            frame:
                 The input frame, unrolled into a 1D vector.
 
         Returns:
-            np.ndarray:
-                The convolved frame.
+            The convolved frame.
         """
 
         # TODO
@@ -206,7 +197,7 @@ class BaseLayer(LoggingMixin):
         Should be be implemented in derived classes.
 
         Args:
-            dt (float):
+            dt:
                 The time interval since the last input.
         """
         pass

@@ -15,7 +15,7 @@ def mkdir(path: Path | str) -> Path:
     return the resolved and expanded path.
 
     Args:
-        path (Path | str):
+        path:
             A directory as a path or a string.
 
     Returns:
@@ -33,14 +33,13 @@ def timestamp(ms: bool = False) -> tuple[str, str]:
     Create a datestamp and a timestamp as formatted strings.
 
     Args:
-        ms (bool, optional):
+        ms:
             Use millisecond precision. Defaults to False.
 
     Returns:
-        tuple[str, str]:
-            A tuple containing:
-                1. The formatted date.
-                2. The formatted time.
+        A tuple containing:
+            1. The formatted date.
+            2. The formatted time.
     """
 
     # Simplified ISO format (no timezone, etc.)
@@ -62,8 +61,7 @@ def thread_id() -> int:
     Get the ID of the current thread.
 
     Returns:
-        int:
-            The thread ID.
+        The thread ID.
     """
     return threading.get_ident()
 
@@ -76,15 +74,14 @@ def cartesian_prod(
     Compute the Cartesian product of two 1D arrays.
 
     Args:
-        arr1 (np.ndarray):
+        arr1:
             First array.
 
-        arr2 (np.ndarray):
+        arr2:
             Second array.
 
     Returns:
-        np.ndarray:
-            The resulting Cartesian product.
+        The resulting Cartesian product.
     """
     return np.transpose([np.repeat(arr1, len(arr2)), np.tile(arr2, len(arr1))])
 
@@ -95,15 +92,20 @@ def load_image(
     scale: float = None,
 ) -> np.ndarray:
     """
-    _summary_
+    Load an image file.
 
     Args:
-        path (Path): _description_
-        grayscale (bool, optional): _description_. Defaults to False.
-        scale (float, optional): _description_. Defaults to None.
+        path:
+            The path to the image.
+
+        grayscale:
+            If True, the image will be converted to greyscale.
+
+        scale:
+            Scale the image.
 
     Returns:
-        np.ndarray: _description_
+        The image as a NumPy array.
     """
 
     # Load the image
@@ -126,16 +128,26 @@ def load_video(
     probe: bool = False,
 ) -> np.ndarray:
     """
-    _summary_
+    Load a video file.
 
     Args:
-        path (Path): _description_
-        grayscale (bool, optional): _description_. Defaults to False.
-        scale (float, optional): _description_. Defaults to None.
-        probe (bool, optional): _description_. Defaults to False.
+        path:
+            Path to the file.
+
+        grayscale:
+            If True, the image will be converted to greyscale.
+
+        scale:
+            Scale the video.
+
+        probe:
+            Only probe the video file for metadata.
+            To be deprecated.
 
     Returns:
-        np.ndarray: _description_
+        The video file as a NumPy array.
+
+        TODO: Lazy loading.
     """
 
     av.logging.set_level(av.logging.VERBOSE)

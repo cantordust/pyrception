@@ -45,11 +45,6 @@ class BipolarLayer(BaseLayer):
         )
         self.rfs.make_rfs()
 
-        # Temporal mean (exponential running mean).
-        # We initialise this to None because it is initialised
-        # with the mean of the first activation map.
-        self.membrane = None
-
         # Range of forgetting rates
         self.forgetting_range = forgetting_range
 
@@ -59,7 +54,9 @@ class BipolarLayer(BaseLayer):
         # Membrane potential
         self.membrane = np.zeros((self.rfs.neuron_count,))
 
-        # Low-pass filter
+        # Temporal mean (exponential running mean).
+        # We initialise this to None because it is initialised
+        # with the mean of the first activation map.
         self.mean = None
 
         self.info("Initialised.")
@@ -97,8 +94,7 @@ class BipolarLayer(BaseLayer):
         The bipolar layer splits the input into ON and OFF pathways.
 
         Returns:
-            np.ndarray:
-                The membrane potential of bipolar cells.
+            An array with the membrane potentials of the bipolar cells.
         """
 
         # Take the difference of the raw receptor input and

@@ -70,8 +70,7 @@ class ReceptorLayer(BaseLayer):
         if saccades are enabled.
 
         Returns:
-            Dims:
-                Dimensions of the visual field, optionally padded.
+            Dimensions of the visual field, optionally padded.
         """
         # This is just for convenience
         (height, width, depth) = self.shape
@@ -107,15 +106,14 @@ class ReceptorLayer(BaseLayer):
         This is part of the implementation of saccadic movements.
 
         Args:
-            frame (np.ndarray):
+            frame:
                 Frame to be padded.
 
-            padding (tuple[int, int, int, int]):
+            padding:
                 Padding extents in the following order: (left, right, top, bottom).
 
         Returns:
-            np.ndarray:
-                The padded frame.
+            The padded frame.
         """
 
         padded = np.pad(frame, padding)
@@ -131,15 +129,11 @@ class ReceptorLayer(BaseLayer):
         Unpad a frame padded with _pad().
 
         Args:
-            tensor (np.ndarray):
-                Padded tensor.
-
-            padding (tuple[int, int, int, int]):
-                Padding extents in the following order: (left, right, top, bottom).
+            tensor: Padded tensor.
+            padding: Padding extents in the following order: (left, right, top, bottom).
 
         Returns:
-            np.ndarray:
-                Unpadded tensor.
+            Unpadded tensor.
         """
 
         return tensor[
@@ -155,46 +149,17 @@ class ReceptorLayer(BaseLayer):
         Convert a tensor to an 8-bit image frame.
 
         Args:
-            tensor (np.ndarray):
+            tensor:
                 Frame to be converted into an 8-bit integer NumPy array.
 
         Returns:
-            np.ndarray:
-                The 8-bit frame.
+            The 8-bit frame.
         """
 
         tmin = frame.min()
 
         return (255 * (frame - tmin) / (frame.max() - tmin + 1e-8)).astype(np.uint8)
 
-    def _scale(
-        self,
-        tensor: np.ndarray,
-        min: tp.Optional[float] = 0.0,
-        max: tp.Optional[float] = 255.0,
-    ) -> np.ndarray:
-        """
-        Min-max normalised version of the frame.
-
-        Args:
-            tensor (np.ndarray):
-                The tensor to be normalised.
-
-            min (tp.Optional[float], optional):
-                Minimal value. Defaults to 0.0.
-
-            max (tp.Optional[float], optional):
-                Maximal value. Defaults to 255.0.
-
-        Returns:
-            np.ndarray:
-                The normalised tensor.
-        """
-
-        tmin = tensor.min()
-        tmax = tensor.max()
-
-        return min + (max - min) * (tensor - tmin) / (tmax - tmin)
 
     def _stretch(
         self,
@@ -204,12 +169,11 @@ class ReceptorLayer(BaseLayer):
         Stretch a 2D or 3D input (image) into a 1D vector.
 
         Args:
-            tensor (np.ndarray):
+            tensor:
                 The tensor to flatten.
 
         Returns:
-            np.ndarray:
-                The flattened tensor
+            The flattened tensor
         """
 
         # TODO: 3D -> 2D
@@ -231,18 +195,17 @@ class ReceptorLayer(BaseLayer):
         Fold a 1D vector into a 2D tensor.
 
         Args:
-            tensor (np.ndarray):
+            tensor:
                 Tensor to be folded.
 
-            height (int):
+            height:
                 Height of the resulting tensor.
 
-            width (int):
+            width:
                 Width of the resulting tensor.
 
         Returns:
-            np.ndarray:
-                The folded tensor.
+            The folded tensor.
         """
 
         return tensor.reshape(width, height)
@@ -260,18 +223,17 @@ class ReceptorLayer(BaseLayer):
         and shifts the frame by that amount.
 
         Args:
-            frame (np.ndarray):
+            frame:
                 The frame to be shifted.
 
-            height_offset (float, optional):
-                Offset to move in the height direction. Defaults to 0.0.
+            height_offset:
+                Offset to move in the height direction.
 
-            width_offset (float, optional):
-                Offset to move in the width direction. Defaults to 0.0.
+            width_offset:
+                Offset to move in the width direction.
 
         Returns:
-            np.ndarray:
-                The patch corresponding to the shifted frame.
+            The patch corresponding to the shifted frame.
         """
 
         # TODO
@@ -308,8 +270,7 @@ class ReceptorLayer(BaseLayer):
         WIP: Needs to be tested.
 
         Returns:
-            np.ndarray:
-                The mask to be applied to the raw input.
+            The mask to be applied to the raw input.
         """
 
         if self.dims.original.depth == 1 or self.greyscale:
@@ -341,20 +302,18 @@ class ReceptorLayer(BaseLayer):
         Read the input and apply a certain offset if saccades are enabled.
 
         Args:
-            frame (np.ndarray):
+            frame:
                 The raw input.
 
-            offset (tuple[float, float] | None, optional):
-                Padding for saccades. Defaults to None.
+            offset:
+                Padding for saccades.
 
-            dt (float | None, optional):
+            dt:
                 In the case of temporal integration,
                 indicates the time since the last input.
-                Defaults to None.
 
         Returns:
-            tuple[np.ndarray, float]:
-                The frame with optional padding (for saccades).
+            The frame with optional padding (for saccades).
         """
 
         # Saccades

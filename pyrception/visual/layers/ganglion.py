@@ -29,20 +29,42 @@ class GanglionLayer(BaseLayer):
         notifier: tp.Callable = None,
     ):
         """
-        _summary_
+        Generic ganglion layer.
 
         Args:
-            shape (tuple[int, ...]): _description_
-            bipolar (BipolarLayer): _description_
-            amacrine (AmacrineLayer): _description_
-            sectors (int, optional): _description_. Defaults to 64.
-            name (str, optional): _description_. Defaults to "Ganglion".
-            inhibition_scale (float, optional): _description_. Defaults to 2.
-            bipolar_params (dict[str, tp.Any], optional): _description_. Defaults to None.
-            amacrine_params (dict[str, tp.Any], optional): _description_. Defaults to None.
-            tau (float | np.ndarray, optional): _description_. Defaults to 1.0.
-            threshold (float | np.ndarray, optional): _description_. Defaults to 0.0.
-            notifier (tp.Callable, optional): _description_. Defaults to None.
+            shape:
+                Input shape.
+
+            bipolar:
+                The bipolar layer providing excitatory input to the ganglion cells.
+
+            amacrine:
+                The amacrine layer providing inhibitory input to the ganglion cells.
+
+            sectors:
+                Number of sectors (angular sections).
+
+            name:
+                The name of the layer.
+
+            inhibition_scale:
+                Strength of the inhibitory signal relative to the excitatory one.
+
+            bipolar_params:
+                Parameters for the bipolar RFs.
+
+            amacrine_params:
+                Parameters for the amacrine RFs.
+
+            tau:
+                Membrane time constant.
+
+            threshold:
+                Spiking threshold.
+
+            notifier:
+                An optional function for progress notification and messaging.
+
         """
 
         # Initialise the base
@@ -107,14 +129,10 @@ class GanglionLayer(BaseLayer):
 
         Args:
 
-            dt (float | None, optional):
-                In the case of temporal integration,
-                indicates the time since the last input.
-                Defaults to None.
+            dt: Indicates the time since the last input in the case of temporal integration.
 
         Returns:
-            np.ndarray:
-                A spike array.
+            A spike array.
         """
 
         # ON centre / OFF surround
@@ -145,16 +163,11 @@ class GanglionLayer(BaseLayer):
 
         Args:
 
-            bipolar_rf_colour (str, optional):
-                The colour to use for highlighting the plotted bipolar cells.
-
-            amacrine_rf_colour (str, optional):
-                The colour to use for highlighting the plotted amacrine cells.
+            bipolar_rf_colour: The colour to use for highlighting the plotted bipolar cells.
+            amacrine_rf_colour: The colour to use for highlighting the plotted amacrine cells.
 
         Returns:
-            np.ndarray:
-                A plot of the receptive fields of the cells.
-
+            A plot of the receptive fields of the cells.
         """
 
         # Plot the bipolar cells

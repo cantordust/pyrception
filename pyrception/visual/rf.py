@@ -40,77 +40,65 @@ class ReceptiveFields(LoggingMixin):
         """
 
         Args:
-            size (tuple[int, ...]):
+            size:
                 The dimensions of the visual field (height, width, depth).
                 NOTE: Colour vision is not implemented yet.
                 It would be necessary to take into account the depth dimension.
 
-            substrate (np.ndarray):
+            substrate:
                 The coordinates of the input cells that constitute the 'substrate' to which
                 the receptive fields are applied. These coordinates could be sparse.
 
-            sectors (int, optional):
-                Number of sectors ('wedges') for logpolar receptive fields. Defaults to 64.
+            sectors:
+                Number of sectors ('wedges') for logpolar receptive fields.
 
-            arrangement (RFArrangement, optional):
+            arrangement:
                 Defines how the RFs are arranged spatially to cover the visual field.
-                Defaults to RFArrangement.LogPolar.
 
-            shape (KernelShape, optional):
+            shape:
                 The shape of the kernel.
                 NOTE: This is *not* the same as a tensor shape - rather,
                 it is the geometric (2D) shape of the kernel.
-                Defaults to KernelShape.Elliptic.
 
-            filter (KernelFilter, optional):
+            filter:
                 The filter response type for receptive fields in this layer.
-                Defaults to KernelFilter.Uniform.
 
-            extent (np.ndarray, optional):
+            extent:
                 Extent of the receptive field coverage.
                 A value of 1.0 means that the entire visual field is covered.
-                Defaults to array([1, 1]).
 
-            scale (np.ndarray, optional):
+            scale:
                 A scaling factor for kernels.
-                Larger values result in kernels that may overlap more,
-                while smaller values may result in kernels that leave gaps in
-                the visual field.
-                Defaults to array([1, 1]).
+                Larger values result in kernels that may overlap more, while smaller
+                values may result in kernels that leave gaps in the visual field.
 
-            min_size (np.ndarray, optional):
+            min_size:
                 Minimal kernel size (usually restricted to the foveal region).
-                Defaults to array([1, 1]).
 
-            angle (float, optional):
+            angle:
                 Angle of the receptive field. Should be between -np.pi and np.pi.
-                Defaults to 0.0.
 
-            sparse (bool, optional):
+            sparse:
                 Indicate that the receptive fields should be sparse.
                 This is relevant for the amacrine and ganglion layers.
-                Defaults to False.
 
-            feedback (bool, optional):
+            feedback:
                 Switch for receptive field feedback connections.
                 The factors are used to average out the feedback of overlapping receptive fields.
                 Mainly used for (inhibitory) feedback neurons, such as horizontal and amacrine cells.
-                Defaults to False.
 
-            phyllotactic (bool, optional):
+            phyllotactic:
                 Switch for phyllotactic arrangement of receptive fields. Only relevant for logpolar arrangement.
-                Defaults to False.
 
-            name (str, optional):
+            name:
                 Layer name. Defaults to "Receptive fields".
                 Each derived class overrides the name with a default value.
 
-            kernel_params (dict[str, tp.Any], optional):
+            kernel_params:
                 Extra parameters to pass to the kernel factory function.
-                Defaults to None.
 
-            notifier (tp.Callable):
-                A progress notification function
+            notifier:
+                A progress notification function.
         """
 
         # Initialise the base
@@ -178,12 +166,10 @@ class ReceptiveFields(LoggingMixin):
         Return the RF factory function based on the RF arrangement.
 
         Raises:
-            TypeError:
-                Raised if the requested RF arrangement is invalid.
+            Raised if the requested RF arrangement is invalid.
 
         Returns:
-            tp.Callable:
-                The RF factory function for the requested RF arrangement.
+            The RF factory function for the requested RF arrangement.
         """
 
         functions = {
@@ -208,7 +194,7 @@ class ReceptiveFields(LoggingMixin):
         of all the pixels in the raw input.
 
         Args:
-            step (int, optional):
+            step:
                 Grid step (defines the coarseness of the mesh). Defaults to 1.
         """
 
@@ -227,19 +213,18 @@ class ReceptiveFields(LoggingMixin):
         dimensions of the visual field.
 
         Args:
-            cartesian (np.ndarray):
+            cartesian:
                 Pixel coordinates of the receptive fields in Cartesian coordinates.
 
-            polar (np.ndarray):
+            polar:
                 Pixel coordinates of the receptive fields in polar coordinates.
 
         Returns:
-            tuple[np.ndarray, ...]:
-                A tuple containing:
-                    1. The trimmed coordinates.
-                    2. The mask that trims the coordinates to the visual field.
-                    3. An index array for the subset of unique coordinates
-                        (since some coordinates might be repeated).
+            A tuple containing:
+                1. The trimmed coordinates.
+                2. The mask that trims the coordinates to the visual field.
+                3. An index array for the subset of unique coordinates
+                    (since some coordinates might be repeated).
         """
 
         cartesian = cartesian.astype(np.int32)
@@ -279,7 +264,7 @@ class ReceptiveFields(LoggingMixin):
         coordinate indices are sorted appropriately.
 
         Args:
-            container (tp.Iterable):
+            container:
                 An iterable containing tuples of some metric
                 (e.g., radius, angle, etc.) and its index.
                 The container should be sorted in such a way
@@ -287,8 +272,7 @@ class ReceptiveFields(LoggingMixin):
                 portion of the container.
 
         Returns:
-            list[np.ndarray]:
-                The indices of the coordinates of the segment.
+            The indices of the coordinates of the segment.
         """
 
         segments = []
@@ -345,8 +329,7 @@ class ReceptiveFields(LoggingMixin):
                 Proceedings II Workshop on Cybernetic Vision.
 
         Returns:
-            np.ndarray:
-                The coordinates of the cells.
+            The coordinates of the cells.
         """
 
         self.info("Creating logpolar receptive fields...")
