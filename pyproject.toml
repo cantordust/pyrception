@@ -40,6 +40,7 @@ gui = ["pyqtgraph", "PySide6"]
 cli = ["cloup"]
 events = ["tonic"]
 dev = ["py-spy"]
+torch = ["torch"]
 docs = [
     "mike",
     "mkdocs-jupyter",
