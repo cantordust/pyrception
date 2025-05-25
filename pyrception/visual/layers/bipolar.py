@@ -1,19 +1,11 @@
-import typing as tp
-
-# --------------------------------------
 import numpy as np
 
-# --------------------------------------
-import skimage as ski
+import typing as tp
 
-# --------------------------------------
-from pyrception import logger
+from pyrception.visual.rf import ReceptiveFields
 from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.layers.horizontal import HorizontalLayer
-from pyrception.visual.rf import ReceptiveFields
-from pyrception.utils.types import KernelFilter
-from pyrception.utils.types import RFArrangement
 
 
 class BipolarLayer(BaseLayer):
@@ -34,7 +26,6 @@ class BipolarLayer(BaseLayer):
         rf_params: dict[str, tp.Any] = None,
         notifier: tp.Callable = None,
     ):
-
         # Initialise the base
         super().__init__(shape, name, notifier)
 
@@ -92,10 +83,11 @@ class BipolarLayer(BaseLayer):
 
         return alpha
 
-    def _compute_membrane_potential(self, activation: np.ndarray,):
-
+    def _compute_membrane_potential(
+        self,
+        activation: np.ndarray,
+    ):
         self.membrane = np.clip(activation - self.mean, min=0.0)
-
 
     def forward(
         self,
@@ -134,5 +126,4 @@ class BipolarLayer(BaseLayer):
         *args,
         **kwargs,
     ):
-
         return self._plot_rfs(self.rfs, *args, **kwargs)

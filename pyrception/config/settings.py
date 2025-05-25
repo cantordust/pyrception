@@ -1,34 +1,21 @@
-# --------------------------------------
 import os
-
-# --------------------------------------
 import sys
-
-# --------------------------------------
-from typing import Type
-
-# --------------------------------------
-from loguru import logger
-
-# --------------------------------------
 from pathlib import Path
 
-# --------------------------------------
+from loguru import logger
 from pydantic import field_validator
-
-# --------------------------------------
 from pydantic_settings import BaseSettings
-from pydantic_settings import BaseSettings
-from pydantic_settings import PydanticBaseSettingsSource
 from pydantic_settings import TomlConfigSettingsSource
+from pydantic_settings import PydanticBaseSettingsSource
 
-# --------------------------------------
-from pyrception.config.base import ConfBase
+from typing import Type
+
 from pyrception.config.base import CONFIG_DIR
-from pyrception.config.components.paths import PathConf
+from pyrception.config.base import ConfBase
 from pyrception.config.components.log import LogConf
-from pyrception.config.components.numeric import NumConf
+from pyrception.config.components.paths import PathConf
 from pyrception.config.components.visual import VisualConf
+from pyrception.config.components.numeric import NumConf
 
 
 class Conf(ConfBase):
@@ -52,7 +39,6 @@ class Conf(ConfBase):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-
         # Default configuration file
         config_file = TomlConfigSettingsSource(
             settings_cls, CONFIG_DIR / "settings.toml"
@@ -67,7 +53,7 @@ class Conf(ConfBase):
         except:
             pass
 
-        return (config_file, )
+        return (config_file,)
 
     @field_validator("*", mode="before", check_fields=False)
     @classmethod

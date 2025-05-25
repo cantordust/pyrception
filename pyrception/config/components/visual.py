@@ -1,23 +1,14 @@
-# --------------------------------------
+import numpy as np
 from pydantic import field_validator
-
-# --------------------------------------
 from matplotlib import colors
 
-# --------------------------------------
-import numpy as np
-
-# --------------------------------------
-from pydantic import field_validator
-
-# --------------------------------------
-from pyrception.utils.types import KernelFilter
+from pyrception.config.base import ConfBase
 from pyrception.utils.types import KernelShape
+from pyrception.utils.types import KernelFilter
 from pyrception.utils.types import RFArrangement
 
 # from pyrception.visual.utils.types import KernelParams
 from pyrception.config.validators import array_validator
-from pyrception.config.base import ConfBase
 
 
 class KernelConf(ConfBase):
@@ -151,7 +142,6 @@ class DimConf(ConfBase):
 
 
 class RFConf(ConfBase):
-
     name: str = "Receptive fields"
     sectors: int = 64
     arrangement: RFArrangement = RFArrangement.LogPolar
@@ -178,7 +168,6 @@ class RFConf(ConfBase):
 
 
 class LayerConf(ConfBase):
-
     rf: RFConf = RFConf()
 
 
@@ -203,7 +192,6 @@ class GanglionLayerConf(LayerConf):
 
 
 class VisualConf(ConfBase):
-
     kernel: KernelConf = KernelConf()
     receptor: ReceptorLayerConf = ReceptorLayerConf()
     horizontal: HorizontalLayerConf = HorizontalLayerConf()

@@ -1,19 +1,13 @@
-import typing as tp
-
-# --------------------------------------
 import numpy as np
 
-# --------------------------------------
-import matplotlib.pyplot as plt
+import typing as tp
 
-# --------------------------------------
+from pyrception.visual.rf import ReceptiveFields
 from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.receptor import ReceptorLayer
-from pyrception.visual.rf import ReceptiveFields
 
 
 class HorizontalLayer(BaseLayer):
-
     def __init__(
         self,
         shape: tuple[int, ...],
@@ -23,10 +17,8 @@ class HorizontalLayer(BaseLayer):
         rf_params: dict[str, tp.Any] = None,
         notifier: tp.Callable = None,
     ):
-
         # Initialise the base
         super().__init__(shape, name, notifier)
-
 
         self.receptor = receptor
 
@@ -56,7 +48,6 @@ class HorizontalLayer(BaseLayer):
         self,
         dt: float | None = None,
     ) -> tuple[np.ndarray, ...]:
-
         # Compute the activation of the horizontal cells
         self.activation = self.convolve(
             self.rfs.forward_synapses, self.receptor.membrane
@@ -74,5 +65,4 @@ class HorizontalLayer(BaseLayer):
         *args,
         **kwargs,
     ):
-
         return self._plot_rfs(self.rfs, *args, **kwargs)

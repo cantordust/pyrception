@@ -1,12 +1,8 @@
-# --------------------------------------
 import enum
-
-# --------------------------------------
-import numpy as np
-
-# --------------------------------------
-from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import dataclass
+
+import numpy as np
 
 
 class InputType(enum.StrEnum):

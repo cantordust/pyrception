@@ -1,25 +1,16 @@
-import typing as tp
-
-# --------------------------------------
+from tqdm import tqdm
 import numpy as np
-
-# --------------------------------------
-import skimage as ski
-
-# --------------------------------------
 from scipy.sparse import csc_array
 
-# --------------------------------------
-from tqdm import tqdm
+import typing as tp
 
-# --------------------------------------
-import pyrception.utils.functions as pcf
 from pyrception import conf
+from pyrception.utils.types import KernelShape
+from pyrception.utils.types import KernelFilter
+from pyrception.utils.types import RFArrangement
 from pyrception.utils.logging import LoggingMixin
 from pyrception.visual.kernel import Kernel
-from pyrception.utils.types import RFArrangement
-from pyrception.utils.types import KernelFilter
-from pyrception.utils.types import KernelShape
+import pyrception.utils.functions as pcf
 
 
 class ReceptiveFields(LoggingMixin):
@@ -322,7 +313,6 @@ class ReceptiveFields(LoggingMixin):
         self,
         polar: np.ndarray,
     ):
-
         # Index the polar coordinates, and then
         # sort them by radius and by angle
         index = np.arange(polar.shape[0])[:, None]
@@ -387,7 +377,6 @@ class ReceptiveFields(LoggingMixin):
         polar_coords = pcf.cartesian_prod(radii, angles)
 
         if self.phyllotactic:
-
             # Stagger the radial component by 0.5 every other sector
             ridx = np.arange(R + 1)
             offset = (np.arange(S + 1) % 2) / 2
@@ -509,7 +498,7 @@ class ReceptiveFields(LoggingMixin):
         # for instance, in the case of horizontal cells.
         # ==================================================
         if self.feedback:
-            self.debug(f"Creating feedback synapses.")
+            self.debug("Creating feedback synapses.")
             (unique, counts) = np.unique(
                 self.rf_coords,
                 return_counts=True,

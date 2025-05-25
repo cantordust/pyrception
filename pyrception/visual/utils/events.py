@@ -1,28 +1,14 @@
-import typing as tp
-
-# --------------------------------------
-import cv2 as cv
-
-# --------------------------------------
-import numpy as np
-
-# --------------------------------------
-from pathlib import Path
-
-# --------------------------------------
-import h5py
-
-# --------------------------------------
 import shutil
+from pathlib import Path
+import subprocess
 
-# --------------------------------------
+import cv2 as cv
+import h5py
 from tqdm import tqdm
-
-# --------------------------------------
+import numpy as np
 from scipy.sparse import coo_matrix
 
-# --------------------------------------
-import subprocess
+import typing as tp
 
 
 class EventLoader:
@@ -107,7 +93,7 @@ class EventLoader:
             if not save:
                 raise SystemExit(f"File '{h5path}' does not exist, exiting.")
 
-            print(f"==[ Converting RAW to HDF5...")
+            print("==[ Converting RAW to HDF5...")
             subprocess.call(["metavision_file_to_hdf5", "-i", f"{path}"])
 
         return EventLoader.load_h5(h5path)
@@ -157,7 +143,7 @@ class EventLoader:
         if use_triggers:
             if self.triggers is None:
                 raise SystemExit(
-                    f"Triggers requested but the data does not contain triggers. Exiting."
+                    "Triggers requested but the data does not contain triggers. Exiting."
                 )
 
             first_ts = self.triggers[0][1]

@@ -1,8 +1,5 @@
-# --------------------------------------
 from typing import Callable
 
-# --------------------------------------
-from pyrception import conf
 from pyrception import logger
 
 

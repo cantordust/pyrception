@@ -1,11 +1,7 @@
-# --------------------------------------
 from pathlib import Path
 
-# --------------------------------------
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
-from pydantic_settings import BaseSettings
-
 
 # The root of the repository
 ROOT_DIR = Path(__file__).parent.parent.parent.parent

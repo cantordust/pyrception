@@ -1,19 +1,14 @@
-# --------------------------------------
-import typing as tp
-
-# --------------------------------------
-import numpy as np
-
-# --------------------------------------
 import math
 
-# --------------------------------------
+import numpy as np
+
+import typing as tp
+
 from pyrception import conf
-from pyrception.utils import functions as ptf
 from pyrception.visual import Dim
 from pyrception.visual import Dims
-from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.rf import ReceptiveFields
+from pyrception.visual.layers.base import BaseLayer
 
 
 class ReceptorLayer(BaseLayer):
@@ -37,7 +32,6 @@ class ReceptorLayer(BaseLayer):
         name: str = "Receptor",
         notifier: tp.Callable = None,
     ):
-
         # Initialise the base
         super().__init__(shape, name, notifier)
 

@@ -1,9 +1,6 @@
-# --------------------------------------
-from typing import Any
-from typing import Iterable
-
-# --------------------------------------
 import numpy as np
+
+from typing import Iterable
 
 
 def array_validator(
@@ -13,7 +10,7 @@ def array_validator(
     fixed_len: int = None,
     dtype: np.dtype = np.int32,
 ) -> np.ndarray:
-    '''
+    """
     Validate an array
 
     Args:
@@ -39,7 +36,7 @@ def array_validator(
     Returns:
         np.ndarray:
             Return a NumPy array.
-    '''
+    """
     if not isinstance(value, (tuple, list, np.ndarray, int, float)):
         raise TypeError(f"Validation error: value {value} is not iterable.")
     if len(value) < min_len:

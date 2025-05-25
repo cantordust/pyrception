@@ -1,17 +1,11 @@
-# --------------------------------------
-import typing as tp
-
-# --------------------------------------
 import numpy as np
 
-# --------------------------------------
-import skimage as ski
+import typing as tp
 
-# --------------------------------------
+from pyrception.visual.rf import ReceptiveFields
+from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.bipolar import BipolarLayer
 from pyrception.visual.layers.amacrine import AmacrineLayer
-from pyrception.visual.layers.base import BaseLayer
-from pyrception.visual.rf import ReceptiveFields
 
 
 class GanglionLayer(BaseLayer):

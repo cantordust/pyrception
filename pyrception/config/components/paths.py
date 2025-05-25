@@ -1,12 +1,11 @@
-# --------------------------------------
 from pathlib import Path
 
-# --------------------------------------
-from pyrception.config.base import ConfBase
 from pyrception.config.base import ROOT_DIR
-from pyrception.config.base import PACKAGE_DIR
-from pyrception.config.base import CONFIG_DIR
 from pyrception.config.base import LOCAL_DIR
+from pyrception.config.base import CONFIG_DIR
+from pyrception.config.base import PACKAGE_DIR
+from pyrception.config.base import ConfBase
+
 
 class PathConf(ConfBase):
     """

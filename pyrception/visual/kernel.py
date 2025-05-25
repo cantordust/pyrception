@@ -1,19 +1,12 @@
-import typing as tp
-
-# --------------------------------------
 import numpy as np
-
-# --------------------------------------
 import skimage as ski
 
-# --------------------------------------
-from pyrception.utils.logging import LoggingMixin
-from pyrception.utils.types import KernelFilter
 from pyrception.utils.types import KernelShape
+from pyrception.utils.types import KernelFilter
+from pyrception.utils.logging import LoggingMixin
 
 
 class Kernel(LoggingMixin):
-
     def __init__(
         self,
         size: np.ndarray,
@@ -28,7 +21,6 @@ class Kernel(LoggingMixin):
         params: dict = None,
         weights: np.ndarray = None,
     ):
-
         super().__init__("Kernel")
         if params is None:
             params = {}
@@ -203,7 +195,7 @@ class Kernel(LoggingMixin):
                 axis=2,
             )
             + self.crop
-        ).reshape(-1,2)
+        ).reshape(-1, 2)
 
         # Outline
         # ==================================================

@@ -1,28 +1,16 @@
-# --------------------------------------
 import numpy as np
-
-# --------------------------------------
-from skimage.color import gray2rgb
-from skimage.color import rgb2gray
-from skimage.color import gray2rgba
-
-# --------------------------------------
-from bokeh.layouts import layout
 from bokeh.models import Div
 from bokeh.models import Row
-from bokeh.models import Column
+from bokeh.layouts import layout
+from skimage.color import gray2rgb
+from skimage.color import rgb2gray
 from bokeh.plotting import show
-from bokeh.plotting import figure
-from bokeh.plotting import output_file
-from bokeh.plotting import output_notebook
 from bokeh.plotting import curdoc
-
-# --------------------------------------
+from bokeh.plotting import figure
+from bokeh.plotting import output_notebook
 from skimage.exposure import rescale_intensity
 
-# --------------------------------------
 import pyrception as pcp
-import pyrception.utils.functions as pcf
 from pyrception.utils.functions import is_notebook
 
 if is_notebook():
@@ -32,7 +20,6 @@ curdoc().theme = "dark_minimal"
 
 
 class Plotter:
-
     def _figure(
         self,
         width: int = 640,

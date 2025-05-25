@@ -1,26 +1,12 @@
-# --------------------------------------
-from datetime import datetime
-
-# --------------------------------------
 from pathlib import Path
-
-# --------------------------------------
-import skimage as ski
-
-# --------------------------------------
-from tqdm import tqdm
-
-# --------------------------------------
-import av
-
-# --------------------------------------
+from datetime import datetime
 import threading
 
-# --------------------------------------
-from IPython import get_ipython
-
-# --------------------------------------
+import av
+from tqdm import tqdm
 import numpy as np
+from IPython import get_ipython
+import skimage as ski
 
 
 def mkdir(path: Path | str) -> Path:
@@ -191,7 +177,7 @@ def is_notebook() -> bool:
     """
     try:
         shell = get_ipython().__class__.__name__
-        match (shell):
+        match shell:
             case "ZMQInteractiveShell":
                 # Jupyter notebook or qtconsole
                 return True

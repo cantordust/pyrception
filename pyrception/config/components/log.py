@@ -1,8 +1,6 @@
-# --------------------------------------
-from pyrception.config.base import ConfBase
-
-# --------------------------------------
 from pydantic import field_validator
+
+from pyrception.config.base import ConfBase
 
 
 class LogColour(ConfBase):
@@ -21,9 +19,7 @@ class LogConf(ConfBase):
     """
 
     verbose: bool = True
-    format: str = (
-        "<magenta>Pyrception</magenta> | <cyan>{time:YYYY-MM-DD@HH:mm:ss}</cyan> | <level>{message}</level>"
-    )
+    format: str = "<magenta>Pyrception</magenta> | <cyan>{time:YYYY-MM-DD@HH:mm:ss}</cyan> | <level>{message}</level>"
     level: str = "INFO"
     colour: LogColour = LogColour()
 

@@ -1,27 +1,18 @@
-import typing as tp
-
-# --------------------------------------
 from pathlib import Path
 
-# --------------------------------------
+import cv2 as cv
 import numpy as np
-
-# --------------------------------------
 import imageio.v3 as iio
 
-# --------------------------------------
-import cv2 as cv
+import typing as tp
 
-# --------------------------------------
 from pyrception import conf
 from pyrception.utils.logging import LoggingMixin
-from pyrception.visual.utils.types import Dim
-from pyrception.visual.utils.types import Dims
-from pyrception.visual.layers.receptor import ReceptorLayer
-from pyrception.visual.layers.horizontal import HorizontalLayer
 from pyrception.visual.layers.bipolar import BipolarLayer
 from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.ganglion import GanglionLayer
+from pyrception.visual.layers.receptor import ReceptorLayer
+from pyrception.visual.layers.horizontal import HorizontalLayer
 
 
 class Retina(LoggingMixin):
@@ -125,7 +116,6 @@ class Retina(LoggingMixin):
         cv.destroyAllWindows()
 
     def _setup_source(self):
-
         if isinstance(self.source, str):
             self.src_path = Path(self.source).absolute()
 
@@ -137,7 +127,7 @@ class Retina(LoggingMixin):
                 self.reader = self._read_frame_file
 
             elif self.src_path.is_file():
-                self.debug(f"Using a video file as a source")
+                self.debug("Using a video file as a source")
 
                 # Source stream
                 self.stream = cv.VideoCapture(self.source)

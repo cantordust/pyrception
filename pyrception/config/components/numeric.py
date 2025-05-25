@@ -1,17 +1,11 @@
-# --------------------------------------
+import numpy as np
 from pydantic import field_validator
 
-# --------------------------------------
-import numpy as np
-
-# --------------------------------------
 # import torch as pt
-
-# --------------------------------------
 from pyrception.config.base import ConfBase
 
-class NumPyConf(ConfBase):
 
+class NumPyConf(ConfBase):
     dtype: np.dtype = np.dtype(np.float32)
 
     @field_validator("dtype", mode="before")
@@ -21,10 +15,12 @@ class NumPyConf(ConfBase):
             return value
         return np.dtype(value)
 
+
 class PyTorchConf(ConfBase):
     # TODO: Add options, e.g., dtype
     # dtype: pt.dtype = pt.dtype(torch.float32)
     pass
+
 
 class NumConf(ConfBase):
     numpy: NumPyConf = NumPyConf()

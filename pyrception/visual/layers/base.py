@@ -1,29 +1,17 @@
-# --------------------------------------
-from typing import Any
-
-# --------------------------------------
-from collections.abc import Iterable
 from collections.abc import Callable
+from collections.abc import Iterable
 
-# --------------------------------------
+import numpy as np
+import skimage as ski
+from bokeh.plotting import figure
 from matplotlib.colors import to_rgba
 
-# --------------------------------------
-import numpy as np
+from typing import Any
 
-# --------------------------------------
-from bokeh.plotting import figure
-
-# --------------------------------------
-import skimage as ski
-
-# --------------------------------------
-from pyrception.utils import functions as pf
 from pyrception.utils.logging import LoggingMixin
 
 # from pyrception.visual import ReceptiveFields
 # from pyrception.visual.utils.types import ImagePlot
-from pyrception.utils.types import KernelFilter
 
 
 class BaseLayer(LoggingMixin):
@@ -103,7 +91,6 @@ class BaseLayer(LoggingMixin):
                 The RGBA values of the colour.
         """
         if colour is not None:
-
             if isinstance(colour, str):
                 colour = to_rgba(colour)
             colour = list(colour)
@@ -166,7 +153,6 @@ class BaseLayer(LoggingMixin):
         # ==================================================
         if rf_colour is not None:
             for c in cells:
-
                 colour = rf_colour
                 if weighted:
                     # colour = colour * rfs.kernels[c].weights[:,None]

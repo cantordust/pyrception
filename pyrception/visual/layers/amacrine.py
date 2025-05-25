@@ -1,17 +1,13 @@
-# --------------------------------------
-import typing as tp
-
-# --------------------------------------
 import numpy as np
 
-# --------------------------------------
+import typing as tp
+
+from pyrception.visual.rf import ReceptiveFields
 from pyrception.visual.layers.base import BaseLayer
 from pyrception.visual.layers.bipolar import BipolarLayer
-from pyrception.visual.rf import ReceptiveFields
 
 
 class AmacrineLayer(BaseLayer):
-
     def __init__(
         self,
         shape: tuple[int, ...],
@@ -21,7 +17,6 @@ class AmacrineLayer(BaseLayer):
         rf_params: dict[str, tp.Any] = None,
         notifier: tp.Callable = None,
     ):
-
         # Initialise the base
         super().__init__(shape, name, notifier)
 
@@ -50,7 +45,6 @@ class AmacrineLayer(BaseLayer):
         self,
         dt: float | None = None,
     ) -> np.ndarray:
-
         # Compute the activation of the amacrine cells
         self.membrane = self.convolve(self.rfs.forward_synapses, self.bipolar.membrane)
 
@@ -61,6 +55,5 @@ class AmacrineLayer(BaseLayer):
         *args,
         **kwargs,
     ):
-
         kwargs.setdefault("rf_colour", "#ff00ffff")
         return self._plot_rfs(self.rfs, *args, **kwargs)
