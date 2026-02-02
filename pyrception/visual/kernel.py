@@ -1,255 +1,350 @@
+from typing import Any
+
 import numpy as np
 import skimage as ski
 
-from pyrception.utils.types import KernelShape
-from pyrception.utils.types import KernelFilter
-from pyrception.utils.logging import LoggingMixin
+from pyrception import utils
+from pyrception.utils.enums import KernelShape
+from pyrception.utils.enums import KernelFilter
 
 
-class Kernel(LoggingMixin):
+class Kernel:
+
     def __init__(
         self,
-        size: np.ndarray,
-        center: np.ndarray,
-        fov: np.ndarray = None,
-        crop: np.ndarray = None,
+        size: int | tuple[int, ...] | np.ndarray,
+        center: tuple[int, ...] | np.ndarray,
         shape: KernelShape = KernelShape.Elliptic,
         filter: KernelFilter = KernelFilter.Uniform,
         angle: float = 0.0,
-        index_map: np.ndarray = None,
-        substrate: np.ndarray = None,
-        params: dict = None,
-        weights: np.ndarray = None,
+        index: int | None = None,
+        coords: np.ndarray | None = None,
+        outline: np.ndarray | None = None,
+        weights: np.ndarray | None = None,
+        span: np.ndarray | None = None,
+        offset: np.ndarray | None = None,
+        name: str = "Kernel",
+        **params,
     ):
-        super().__init__("Kernel")
-        if params is None:
-            params = {}
 
-        if crop is None:
-            crop = np.array([0, 0], dtype=np.uint32)
-        self.crop = crop
+        if len(size) > 2 or any(s <= 0 for s in size):
+            raise AttributeError(f"Invalid size '{size}'")
 
-        self.size = size
-        self.center = center
-        if fov is None:
-            fov = np.array(size)
-        self.fov = fov
-        self.shape = shape
-        self.filter = filter
-        self.angle = angle
-        self.params = params
-
-        self.coordinates = None
-        self.indices = None
-        self.outline = None
+        self.size = utils.arg2np(size, dtype=np.int32, ext=2)
+        self.center = utils.arg2np(center, dtype=np.int32, ext=2)
+        self.shape = KernelShape(shape)
+        self.filter = KernelFilter(filter)
+        self.angle = float(angle)
+        self.index = index
+        self.coords = coords
+        self.outline = outline
         self.weights = weights
+        self.span = span
+        self.offset = offset
+        self.name = name
+        self.params = params or {}
 
-        self.make_shape()
-        self.extract_indices(index_map, substrate)
-        self.make_filter()
+    def __repr__(self):
+        cls = self.__class__.__name__
+        return f"{cls}(size={self.size}, shape={self.shape}, filter={self.filter})"
 
-    @property
-    def make_shape(self):
+    @staticmethod
+    def make_kernel(
+        kshape: KernelShape,
+        size: np.ndarray,
+        angle: float = 0.0,
+    ) -> tuple[tuple[np.ndarray, ...], ...]:
         """
-        Return the kernel factory function based on the kernel shape.
+        Create a kernel with the requested shape and angle.
+
+        Args:
+            kshape:
+                A KernelShape parameter.
+
+            size:
+                Kernel size (x and y extent).
+
+            angle:
+                Rotation angle.
+
+        Returns:
+            The kernel and its outline, each as two separate arrays
+            (rows and columns).
 
         Raises:
             TypeError:
                 Raised if the requested kernel shape is invalid.
-
-        Returns:
-            tp.Callable:
-                The kernel factory function for the requested kernel shape.
         """
+        match kshape:
+            case KernelShape.Rectangular:
+                return Kernel.make_rectangular_kernel(size, angle)
 
-        shape_functions = {
-            KernelShape.Elliptic: self._make_elliptic_kernel,
-            KernelShape.Rectangular: self._make_rectangular_kernel,
-        }
+            case KernelShape.Elliptic:
+                return Kernel.make_elliptic_kernel(size, angle)
 
-        shape_function = shape_functions.get(self.shape, None)
+            case _:
+                raise TypeError(f"Invalid kernel shape '{kshape}'")
 
-        if shape_function is None:
-            raise TypeError(f"Invalid kernel shape '{self.shape}'")
-
-        return shape_function
-
-    @property
-    def make_filter(self):
+    @staticmethod
+    def make_filter(
+        kfilter: KernelFilter,
+        rows: np.ndarray,
+        cols: np.ndarray,
+        **params,
+    ) -> np.ndarray:
         """
-        Return the kernel factory function based on the kernel filter.
+        Compute the weights that implement the specified filter
+        from the row and column indices of the kernel.
+
+        Args:
+            kfilter:
+                Filter type (uniform, Gaussian, etc.)
+
+            rows:
+                Row indices to the kernel.
+
+            cols:
+                Column indices of the kernel.
 
         Raises:
             TypeError:
                 Raised if the requested kernel filter is invalid.
 
         Returns:
-            tp.Callable:
-                The kernel factory function for the requested kernel filter.
+            The kernel factory function for the requested kernel filter.
         """
 
-        filter_functions = {
-            KernelFilter.Uniform: self._make_uniform_weights,
-            KernelFilter.Gaussian: self._make_gaussian_weights,
-            KernelFilter.Gabor: self._make_gabor_weights,
-        }
+        match kfilter:
+            case KernelFilter.Uniform:
+                return Kernel.make_uniform_filter(rows, **params)
 
-        filter_function = filter_functions.get(self.filter, None)
+            case KernelFilter.Gaussian:
+                return Kernel.make_gaussian_filter(rows, cols, **params)
 
-        if filter_function is None:
-            raise TypeError(f"Invalid kernel filter '{self.filter}'")
+            case KernelFilter.Gabor:
+                return Kernel.make_gabor_filter(rows, cols, **params)
 
-        return filter_function
+            case _:
+                raise TypeError(f"Invalid filter type '{kfilter}'")
 
-    def extract_indices(
-        self,
-        index_map: np.ndarray,
-        substrate: np.ndarray,
+    @staticmethod
+    def _rotate(
+        rows: np.ndarray,
+        cols: np.ndarray,
+        angle: float,
     ):
         """
-        Extract the sparse indices of the kernel based on the
-        arrangement of input cells in the substrate.
+        Rotate the indices (rows and columns) by a certain angle.
 
         Args:
-            index_map: A 2D array containing the indices of each cell in the substrate.
-            substrate: The input substrate.
+            rows:
+                Row part of the indices.
+
+            cols:
+                Column part of the indices.
+
+            angle:
+                Angle to rotate by.
+
+        Returns:
+            The rotated indices (rounded to an integer so that they can be used
+            to index other arrays).
         """
 
-        # Indices
-        # ==================================================
-        overlap = index_map[self.coordinates[:, 0], self.coordinates[:, 1]]
-        self.indices = overlap[overlap != 0]
-        # print(f"==[ indices: {self.indices}")
+        angle = np.deg2rad(-angle)
+        c, s = np.cos(angle), np.sin(angle)
+        _rows = rows * c + cols * s
+        _cols = -rows * s + cols * c
 
-        # Re-extract the coordinates from the indices and the substrate.
-        # This is necessary to sparsify the coordinates for layers with sparse input.
-        # print(f"==[ centre: {self.center}")
-        # print(f"==[ len(substrate): {len(substrate)}")
-        self.coordinates = substrate[self.indices]
+        return np.round(_rows).astype(np.int32), np.round(_cols).astype(np.int32)
 
-    def _make_elliptic_kernel(self):
+    @staticmethod
+    def make_elliptic_kernel(
+        size: np.ndarray,
+        angle: float = 0.0,
+    ) -> np.ndarray:
         """
-        Create an elliptic kernel centred at a certain pixel and
-        having the specified spread (semi-major axes).
-        The kernel can be optionally rotated at an angle.
+        Create an elliptic kernel having a certain size
+        (defined as the semi-major axes).
+        The kernel can be optionally rotated.
+
+        NOTE: We assume that rotation angles increase *counterclockwise*.
+
+        Args:
+            size:
+                Kernel size (sides of the rectangle).
+
+            angle:
+                Rotation angle.
+
+        Returns:
+            The rows and columns of the kernel and its outline.
         """
 
-        center = self.center - self.crop
-        size = self.size.astype(np.int32)
+        angle = np.deg2rad(angle)
 
-        # Coordinates
-        # ==================================================
-        self.coordinates = (
-            np.stack(
-                ski.draw.ellipse(
-                    center[0],
-                    center[1],
-                    self.size[0],
-                    self.size[1],
-                    shape=self.fov,
-                    rotation=self.angle,
-                ),
-                axis=1,
-            )
-            + self.crop
+        size = np.clip(size, 0.5, None)
+
+        coords = ski.draw.ellipse(
+            0,
+            0,
+            size[0],
+            size[1],
+            rotation=angle,
         )
 
-        # Outline
-        # ==================================================
-        self.outline = (
-            np.stack(
-                ski.draw.ellipse_perimeter(
-                    center[0],
-                    center[1],
-                    size[0],
-                    size[1],
-                    shape=self.fov,
-                    orientation=self.angle,
-                ),
-                axis=1,
-            )
-            + self.crop
+        outline = ski.draw.ellipse_perimeter(
+            0,
+            0,
+            size[0].astype(np.int32),
+            size[1].astype(np.int32),
+            orientation=-angle,
         )
 
-    def _make_rectangular_kernel(self):
+        return coords, outline
+
+    @staticmethod
+    def make_rectangular_kernel(
+        size: np.ndarray,
+        angle: float = 0.0,
+    ) -> np.ndarray:
         """
-        Create a rectangular kernel centred at a certain pixel and
-        having the specified spread (side lengths).
-        The kernel can be optionally rotated at an angle.
-        """
+        Create a rectangular kernel and its outline.
 
-        center = self.center - self.crop
+        NOTE: We assume that rotation angles increase *counterclockwise*.
 
-        # Coordinates
-        # ==================================================
-        self.coordinates = (
-            np.stack(
-                ski.draw.rectangle(
-                    center - self.size,
-                    center + self.size,
-                    shape=self.fov,
-                ),
-                axis=2,
-            )
-            + self.crop
-        ).reshape(-1, 2)
+        Args:
+            size:
+                Kernel size (sides of the rectangle).
 
-        # Outline
-        # ==================================================
-        self.outline = (
-            np.stack(
-                ski.draw.rectangle_perimeter(
-                    center - self.size,
-                    center + self.size,
-                    shape=self.fov,
-                ),
-                axis=1,
-            )
-            + self.crop
-        )
+            angle:
+                Rotation angle.
 
-    def _make_uniform_weights(self):
-        """
-        Weights from a uniform distribution.
+        Returns:
+            The rows and columns of the kernel and its outline.
         """
 
-        if self.coordinates.size == 0:
-            return
+        # Compute the extent of the rectangle in the x and y directions
+        size = np.repeat(size[None, :], 2, axis=0).astype(np.int32)
+        size[0] *= -1
+        xext, yext = size[:, 0], size[:, 1]
 
-        if self.weights is None:
-            self.weights = np.full(
-                (len(self.coordinates),),
-                1 / len(self.coordinates),
-                dtype=np.float32,
-            )
+        # Vertex indices
+        vr = np.repeat(xext, 2)
+        vc = np.concatenate((yext, yext[::-1]))
 
-    def _make_gaussian_weights(self):
+        # Rotate
+        vr, vc = Kernel._rotate(vr, vc, angle)
+
+        # Dimensions of the virtual container of the polygon.
+        # Any negative indices are dropped by SKImange by default,
+        # so we need to shift by the minimum in each dimension.
+        h = vr.max() - vr.min()
+        w = vc.max() - vc.min()
+        vr += abs(vr.min())
+        vc += abs(vc.min())
+
+        # Draw the rectangles
+        rr, cc = ski.draw.polygon(vr, vc)
+        rrp, ccp = ski.draw.polygon_perimeter(vr, vc)
+
+        # Shift back by h // 2 and w // 2 to center at the origin.
+        coords = (rr - h // 2, cc - w // 2)
+        outline = (rrp - h // 2, ccp - w // 2)
+
+        return coords, outline
+
+    @staticmethod
+    def make_uniform_filter(
+        rows: np.ndarray,
+        **params,
+    ) -> np.ndarray:
+        """
+        Weights following a uniform distribution.
+
+        Args:
+            rows:
+                Kernel rows.
+
+        Returns:
+            The kernel weights.
+        """
+
+        return np.full((len(rows),), 1 / len(rows), dtype=np.float32)
+
+    @staticmethod
+    def make_gaussian_filter(
+        rows: np.ndarray,
+        cols: np.ndarray,
+        angle: float = 0.0,
+        sd: float = (1.0, 1.0),
+        **params,
+    ) -> np.ndarray:
         """
         Weights following a 2D Gaussian distribution.
+
+        Args:
+            rows:
+                Kernel rows.
+
+            cols:
+                Kernel columns.
+
+            angle:
+                Kernel rotation angle.
+
+            sd:
+                The standard deviation (the x and y values can be specified independently).
+
+        Returns:
+            The normalised weights of the kernel.
         """
 
-        center = self.center - self.crop
-        size = self.size.astype(np.int32)
+        if isinstance(sd, (float, int)) or len(sd) == 1:
+            sd = (sd, sd)
 
-        sd = size * 0.5
+        # Rotate
+        _rows, _cols = Kernel._rotate(rows, cols, -angle)
 
-        # Create a Gaussian distribution
-        coords = (self.coordinates - center) / (sd)
+        sd_x = sd[0] * np.clip(_cols.std(), 0.1, None)
+        sd_y = sd[1] * np.clip(_rows.std(), 0.1, None)
 
-        self.weights = np.exp(-0.5 * (coords[:, 0] ** 2 + coords[:, 1] ** 2))
+        # Make a Gaussian
+        weights = np.exp(-0.5 * ((_rows / sd_y) ** 2 + (_cols / sd_x) ** 2))
 
-        # Normalise if necessary
-        if self.params.get("normalise"):
-            self.weights /= 2 * np.pi * (sd[0] * sd[1])
+        # Normalise
+        weights /= 2 * np.pi * (sd_y * sd_x)
 
-    def _make_gabor_weights(self):
+        return weights / weights.sum()
+
+    @staticmethod
+    def make_gabor_filter(
+        rows: np.ndarray,
+        cols: np.ndarray,
+        angle: float = 0.0,
+        sd: float = (1.0, 1.0),
+    ):
         """
         Weights corresponding to a Gabor filter.
 
-        WIP: This is a stub.
         TODO: Check if we can incorporate this into the Gaussian kernel method
         since we only have to add a couple of extra parameters and superimpose
         the sine funciton.
         """
+        pass
 
+    @staticmethod
+    def make_von_mises_filter(
+        rows: np.ndarray,
+        cols: np.ndarray,
+        angle: float = 0.0,
+        sd: float = (1.0, 1.0),
+    ):
+        """
+        Weights corresponding to a Gabor filter.
+
+        TODO: Check if we can incorporate this into the Gaussian kernel method
+        since we only have to add a couple of extra parameters and superimpose
+        the sine funciton.
+        """
         pass
