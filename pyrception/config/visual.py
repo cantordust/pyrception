@@ -3,13 +3,6 @@ from matplotlib import colors
 from dataclasses import dataclass
 from dataclasses import field
 
-# from pyrception.config.enums import KernelShape
-# from pyrception.config.enums import KernelFilter
-# from pyrception.config.enums import RFArrangement
-
-# from pyrception.visual.utils.types import KernelParams
-# from pyrception.config.validators import array_validator
-
 
 @dataclass
 class KernelConfig:
@@ -36,6 +29,7 @@ class KernelConfig:
     min_size: np.ndarray = field(default_factory=lambda: np.ones((2,), dtype=np.int32))
     aspect: np.ndarray = field(default_factory=lambda: np.ones((2,), dtype=np.float32))
     extra: dict = field(default_factory=lambda: dict())
+
 
 @dataclass
 class PlotEntryConfig:
