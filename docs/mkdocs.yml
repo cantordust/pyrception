@@ -1,25 +1,30 @@
 site_name: Pyrception
 repo_url: https://github.com/cantordust/pyrception
+site_dir: site
+docs_dir: src
 nav:
   - Overview: index.md
   - API:
       - Modules:
           - Visual:
-            - Layers:
-                - Receptor: source/visual/layers/receptor.md
-                - Horizontal: source/visual/layers/horizontal.md
-                - Bipolar: source/visual/layers/bipolar.md
-                - Amacrine: source/visual/layers/amacrine.md
-                - Ganglion: source/visual/layers/ganglion.md
-            - Retina: source/visual/retina.md
-            - Receptive fields: source/visual/rf.md
-          - Utils: source/visual/utils.md
-      - Utils: source/utils.md
-      - Configuration:
-         - Settings: source/conf/settings.md
-         - Components: source/conf/components.md
+              - Layers:
+                  - Base: source/visual/layers/base.md
+                  - Receptor: source/visual/layers/receptor.md
+                  - Horizontal: source/visual/layers/horizontal.md
+                  - Bipolar: source/visual/layers/bipolar.md
+                  - Amacrine: source/visual/layers/amacrine.md
+                  - Ganglion: source/visual/layers/ganglion.md
+              - Kernel: source/visual/kernel.md
+              - Receptive fields: source/visual/rf.md
+              - Retina: source/visual/retina.md
+      - Utilities:
+          - Overview: source/utils/utils.md
+          - Mixins: source/utils/mixins.md
+          - Processors: source/utils/processors.md
+      - Configuration: source/config.md
   - Examples:
       - Image: notebooks/image.ipynb
+      - Video: notebooks/video.ipynb
 theme:
   name: material
   palette:

@@ -1,0 +1,19 @@
+:root>* {
+    --md-code-bash-string-color: #0FF1CE;
+}
+
+/* Force horizontal scrolling behaviour on regular output cells */
+.jupyter-wrapper .jp-OutputArea-output pre {
+    white-space: pre !important;
+}
+
+/* Set a maximum height on output cells */
+.jupyter-wrapper .jp-OutputArea-output pre {
+    max-height: 300px;
+}
+
+.md-grid {
+    margin-left: 5%;
+    margin-right: 5%;
+    max-width: 90%;
+}
