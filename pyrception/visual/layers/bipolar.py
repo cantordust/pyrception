@@ -1,73 +1,67 @@
 import numpy as np
-
-import typing as tp
-
+from pyrception.utils import plot
+from pathlib import Path
+from bokeh.plotting import figure
+import skimage as ski
 from pyrception.visual.rf import ReceptiveFields
-from pyrception.visual.layers.base import BaseLayer
-from pyrception.visual.layers.receptor import ReceptorLayer
-from pyrception.visual.layers.horizontal import HorizontalLayer
+from pyrception.visual.layers.base import LayerBase
+from pyrception.utils.processors import VideoLoader
+from pyrception.utils.processors import VideoRecorder
 
 
-class BipolarLayer(BaseLayer):
-    """
-    A layer of bipolar cells.
-    This layer processes the signal form the receptor layer
-    modulated by the horizontal layer.
-    """
+class BipolarLayer(LayerBase):
 
     def __init__(
         self,
-        shape: tuple[int, ...],
-        receptor: ReceptorLayer,
-        horizontal: HorizontalLayer,
-        sectors: int = 64,
-        name: str = "Bipolar",
-        forgetting_range: tuple[float, float] = (0.05, 0.95),
-        rf_params: dict[str, tp.Any] = None,
-        notifier: tp.Callable = None,
+        excitatory: ReceptiveFields,
+        alpha: int | float | tuple[float, float] = (0.05, 0.25),
+        *args,
+        **kwargs,
     ):
+        """
+        A layer of bipolar cells.
+        This layer processes the signal form the receptor layer
+        modulated by the horizontal layer.
+        """
         # Initialise the base
-        super().__init__(shape, name, notifier)
+        super().__init__(excitatory.size, *args, **kwargs)
 
-        self.receptor = receptor
-        self.horizontal = horizontal
+        self.excitatory = excitatory
 
-        # Initialise the receptive fields.
-        if rf_params is None:
-            rf_params = {}
-        rf_params.setdefault("name", f"{name} | Receptive fields")
-        self.rfs = ReceptiveFields(
-            self.shape,
-            receptor.rfs.cell_coordinates,
-            sectors,
-            notifier=notifier,
-            **rf_params,
-        )
-        self.rfs.make_rfs()
-
-        # Range of forgetting rates
-        self.forgetting_range = forgetting_range
-
-        # 'Forgetting rate' for the temporal mean
-        self.alpha = self.compute_forgetting_rate()
+        # Exponential running mean decay rate
+        self.alpha = self._compute_alpha(alpha)
 
         # Membrane potential
-        self.membrane = np.zeros((self.rfs.neuron_count,))
+        self.membrane = np.zeros((self.excitatory.cell_count,))
+        self.on = np.zeros_like(self.membrane)
+        self.off = np.zeros_like(self.membrane)
+        self.norm = np.zeros(self.excitatory.size[:2])
 
-        # Temporal mean (exponential running mean).
-        # We initialise this to None because it is initialised
-        # with the mean of the first activation map.
-        self.mean = None
+        self.logger.info("Initialised.")
 
-        self.info("Initialised.")
+    def _compute_alpha(
+        self,
+        alpha: int | float | tuple[float, float] = (0.05, 0.25),
+    ) -> np.ndarray:
+        """
+        Compute the decay coefficient (alpha) for each neuron.
 
-    def compute_forgetting_rate(self):
-        hr = self.rfs.cell_coordinates[:, 0] - self.rfs.height // 2
-        wr = self.rfs.cell_coordinates[:, 1] - self.rfs.width // 2
+        Args:
+            alpha: The value(s) that alpha could take.
+
+        Returns:
+            The distribution of decay coefficients.
+        """
+
+        if isinstance(alpha, (int, float)):
+            alpha = [alpha, alpha]
+
+        hr = self.excitatory.cell_coordinates[:, 0] - self.excitatory.height // 2
+        wr = self.excitatory.cell_coordinates[:, 1] - self.excitatory.width // 2
 
         distances = np.sqrt(hr**2 + wr**2)
-        alpha_min = self.forgetting_range[0]
-        alpha_max = self.forgetting_range[1]
+        alpha_min = alpha[0]
+        alpha_max = alpha[1]
 
         alpha = 1 - 1 / (1 + distances / distances.max())
 
@@ -76,22 +70,125 @@ class BipolarLayer(BaseLayer):
             alpha.max() - alpha.min()
         )
 
-        self.debug(f"Forgetting rate range: {alpha.min():>0.3f} - {alpha.max():>0.3f}")
+        self.logger.debug(f"Alpha range: {alpha.min():>0.3f} - {alpha.max():>0.3f}")
 
         return alpha
 
-    def _compute_membrane_potential(
-        self,
-        activation: np.ndarray,
-    ):
-        self.membrane = np.clip(activation - self.mean, min=0.0)
+    def _on_frame(self):
+        self._canvas *= 0
+        self._canvas[
+            self.excitatory.cell_coordinates[:, 0],
+            self.excitatory.cell_coordinates[:, 1],
+        ] = self.on
+        return self._canvas
+
+    def _off_frame(self):
+        self._canvas *= 0
+        self._canvas[
+            self.excitatory.cell_coordinates[:, 0],
+            self.excitatory.cell_coordinates[:, 1],
+        ] = self.off
+        return self._canvas
+
+    def _diff_frame(self):
+        self._canvas *= 0
+        self._canvas[
+            self.excitatory.cell_coordinates[:, 0],
+            self.excitatory.cell_coordinates[:, 1],
+        ] = (
+            self.on - self.off
+        )
+        return self._canvas
+
+    def _on_off_frame(self):
+        """
+        _summary_
+
+        Returns:
+            _description_
+        """
+        canvas = np.zeros((*self._size, 3))
+        canvas[
+            self.excitatory.cell_coordinates[:, 0],
+            self.excitatory.cell_coordinates[:, 1],
+            0,
+        ] = ski.exposure.rescale_intensity(
+            self.on,
+            out_range=np.ubyte,
+        )
+        canvas[
+            self.excitatory.cell_coordinates[:, 0],
+            self.excitatory.cell_coordinates[:, 1],
+            1,
+        ] = ski.exposure.rescale_intensity(
+            self.off,
+            out_range=np.ubyte,
+        )
+        return canvas
+
+    def _ring_delog_canvas_on(self):
+        """
+        _summary_
+
+        Returns:
+            _description_
+        """
+        max_ring_size = np.max([ring.size for ring in self.excitatory.cell_rings])
+        ring_array = np.zeros((len(self.excitatory.cell_rings), max_ring_size))
+        for r in range(len(self.excitatory.cell_rings)):
+            left_arc = self.excitatory.cell_rings[r][
+                len(self.excitatory.cell_rings[r])
+                // 4 : -len(self.excitatory.cell_rings[r])
+                // 4
+            ]
+            right_arc = np.concatenate(
+                (
+                    self.excitatory.cell_rings[r][
+                        -len(self.excitatory.cell_rings[r]) // 4 :
+                    ],
+                    self.excitatory.cell_rings[r][
+                        : len(self.excitatory.cell_rings[r]) // 4
+                    ],
+                )
+            )
+            ring_array[r, max_ring_size // 2 - len(left_arc) : max_ring_size // 2] = (
+                self.on[left_arc]
+            )
+            ring_array[r, max_ring_size // 2 : max_ring_size // 2 + len(right_arc)] = (
+                self.on[right_arc]
+            )
+
+        return ring_array
+
+    def _sector_delog_canvas_on(self):
+        """
+        _summary_
+
+        Returns:
+            _description_
+        """
+        max_sector_size = np.max([ring.size for ring in self.excitatory.cell_rings])
+        sector_array = np.zeros((len(self.excitatory.cell_sectors), max_sector_size))
+        for s in range(len(self.excitatory.cell_sectors)):
+            sector_array[s, : len(self.excitatory.cell_sectors[s])] = self.on[
+                self.excitatory.cell_sectors[s]
+            ]
+
+        return sector_array
 
     def forward(
         self,
+        raw: np.ndarray,
+        feedback: np.ndarray,
         dt: float | None = None,
     ) -> np.ndarray:
         """
         The bipolar layer splits the input into ON and OFF pathways.
+
+        Args:
+            raw: The raw input signal from the receptor layer.
+            feedback: The feedback signal from the horizontal layer.
+            dt: (Optional) time since the last input.
 
         Returns:
             An array with the membrane potentials of the bipolar cells.
@@ -99,27 +196,145 @@ class BipolarLayer(BaseLayer):
 
         # Take the difference of the raw receptor input and
         # the spatial mean as computed by the horizontal cells.
-        scaled_input = self.receptor.membrane - self.horizontal.feedback
+        self.norm = raw - feedback
 
         # Compute the nominal activation for each bipolar cell
-        activation = self.convolve(self.rfs.forward_synapses, scaled_input)
+        activation = self.convolve(self.excitatory.forward_synapses, self.norm)
 
         # The filter implemented by the bipolar cell is
-        # a temporal exponential running mean of the activation.
-        # The membrane potential is computed as a rectified
-        # version of the deviation from that mean.
+        # an exponential running mean of the activation.
+        # The on/off activations are computed as rectified
+        # versions of the deviations from that mean in positive
+        # and negative direction, respectively.
+        # The mean is effectively filtered out here.
         # ==================================================
-        if self.mean is None:
-            self.mean = activation.mean()
-        else:
-            self.mean += self.alpha * activation
-        self._compute_membrane_potential(activation)
+        self.membrane += self.alpha * (activation - self.membrane)
+        deviation = activation - self.membrane
 
-        return self.membrane
+        self.on = np.where(deviation > 0.0, deviation, 0.0)
+        self.off = np.where(deviation < 0.0, -deviation, 0.0)
 
-    def plot_rfs(
+        for recorder in self._recorders.values():
+            recorder.update()
+
+        return (self.on, self.off)
+
+    def visualise_activations(
         self,
-        *args,
-        **kwargs,
-    ):
-        return self._plot_rfs(self.rfs, *args, **kwargs)
+        on: bool = True,
+        off: bool = True,
+    ) -> figure:
+        """
+        Visualise the activations of ON and OFF bipolar cells.
+
+        Args:
+            on: If set, visualise ON cell activations.
+            off: If set, visualise ON cell activations.
+
+        Returns:
+            A Bokeh figure.
+        """
+
+        entries = []
+        if on:
+            bp_on_canvas = np.zeros((self.excitatory.height, self.excitatory.width))
+            bp_on_canvas[
+                self.excitatory.cell_coordinates[:, 0],
+                self.excitatory.cell_coordinates[:, 1],
+            ] = self.on
+            entries.append(plot.image(bp_on_canvas, title="ON bipolar"))
+
+        if off:
+            bp_off_canvas = np.zeros((self.excitatory.height, self.excitatory.width))
+            bp_off_canvas[
+                self.excitatory.cell_coordinates[:, 0],
+                self.excitatory.cell_coordinates[:, 1],
+            ] = self.off
+            entries.append(plot.image(bp_off_canvas, title="OFF bipolar"))
+
+        if len(entries) > 0:
+            return plot.show_composite([entries])
+
+    def record_on(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+        return self.add_recorder(
+            "on",
+            fpath,
+            self._on_frame,
+            self.excitatory.size,
+            vl=vl,
+        )
+
+    def record_off(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+        return self.add_recorder(
+            "off",
+            fpath,
+            self._off_frame,
+            self.excitatory.size,
+            vl=vl,
+        )
+
+    def record_on_off(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+        return self.add_recorder(
+            "on_off",
+            fpath,
+            self._on_off_frame,
+            self.excitatory.size,
+            vl=vl,
+        )
+
+    def record_diff(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+        return self.add_recorder(
+            "diff",
+            fpath,
+            self._diff_frame,
+            self.excitatory.size,
+            vl=vl,
+        )
+
+    def record_ring_delog_on(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+
+        max_ring_size = np.max([ring.size for ring in self.excitatory.cell_rings])
+        ring_array = np.zeros((len(self.excitatory.cell_rings), max_ring_size))
+        return self.add_recorder(
+            "ring_delog_on",
+            fpath,
+            self._ring_delog_canvas_on,
+            ring_array.shape,
+            vl=vl,
+        )
+
+    def record_sector_delog_on(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+
+        max_sector_size = np.max([ring.size for ring in self.excitatory.cell_rings])
+        sector_array = np.zeros((len(self.excitatory.cell_rings), max_sector_size))
+        return self.add_recorder(
+            "sector_delog_on",
+            fpath,
+            self._sector_delog_canvas_on,
+            sector_array.shape,
+            vl=vl,
+        )
