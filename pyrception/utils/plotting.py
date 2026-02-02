@@ -1,3 +1,4 @@
+
 import numpy as np
 from bokeh.models import Div
 from bokeh.models import Row
@@ -10,291 +11,260 @@ from bokeh.plotting import figure
 from bokeh.plotting import output_notebook
 from skimage.exposure import rescale_intensity
 
-import pyrception as pcp
+from pyrception import logger
 from pyrception.utils.functions import is_notebook
 
+from bokeh.io.notebook import CommsHandle
+
 if is_notebook():
-    pcp.logger.info("Running inside a notebook.")
+    logger.debug("Running inside a notebook.")
     output_notebook()
 curdoc().theme = "dark_minimal"
 
 
-class Plotter:
-    def _figure(
-        self,
-        width: int = 640,
-        height: int = 480,
-        title: str = None,
-        tools: str | set[str] | bool = True,
-        logo: bool = False,
-        title_style: dict | None = None,
-    ) -> figure:
-        """
-        Create a Bokeh figure.
+def make_figure(
+    height: int = 600,
+    width: int = 800,
+    title: str = None,
+    tools: str | set[str] | bool = True,
+    logo: bool = False,
+    title_style: dict | None = None,
+) -> figure:
+    """
+    Create a Bokeh figure.
 
-        Args:
+    Args:
 
-            width (int, optional):
-                Figure width. Defaults to 640.
+        height: Figure height.
+        width: Figure width.
+        title: The title for this figure.
+        tools: Show one or more specific tools or hide the toolbox altogether.
+        logo: Show or hide the logo.
+        title_style: Title style.
 
-            height (int, optional):
-                Figure height. Defaults to 640.
+    Returns:
+        A Bokeh figure.
+    """
 
-            title (str, optional):
-                The title for this figure. Defaults to None.
+    # Tools
+    # ==================================================
+    if isinstance(tools, bool) and tools:
+        tools = ["wheel_zoom", "pan", "reset"]
 
-            tools (str | set[str] | bool, optional):
-                Show one or more specific tools or hide the toolbox altogether. Defaults to True.
+    if isinstance(tools, (tuple, list)):
+        tools = set(tools)
 
-            logo (bool, optional):
-                Show or hide the logo. Defaults to False.
+    if tools and not is_notebook():
+        tools.add("save")
 
-            title_style (dict | None, optional):
-                Title style. Defaults to None.
+    if tools:
+        tools = list(tools)
+    else:
+        tools = []
 
-        Returns:
-            figure:
-                Returns a Bokeh figure.
-        """
+    # Figure
+    # ==================================================
+    p = figure(
+        height=int(height),
+        width=int(width),
+        output_backend="webgl",
+        tools=tools,
+        title=title,
+    )
 
-        # Tools
-        # ==================================================
-        if isinstance(tools, bool) and tools:
-            tools = ["wheel_zoom", "pan", "reset"]
+    if title_style is None:
+        title_style = {
+            "text_font_size": "16px",
+            "align": "center",
+        }
 
-        if isinstance(tools, (tuple, list)):
-            tools = set(tools)
+    if p.title is not None:
+        for k, v in title_style.items():
+            setattr(p.title, k, v)
 
-        if tools and not is_notebook():
-            tools.add("save")
+    if not logo:
+        if len(tools) == 0:
+            p.toolbar_location = None
+        p.toolbar.logo = None
 
-        if tools:
-            tools = list(tools)
-        else:
-            tools = []
+    return p
 
-        # Figure
-        # ==================================================
-        p = figure(
-            width=int(width),
-            height=int(height),
-            output_backend="webgl",
-            tools=tools,
-            title=title,
-        )
 
-        if title_style is None:
-            title_style = {
-                "text_font_size": "16px",
-                "align": "center",
-            }
+def image(
+    image: np.ndarray,
+    title: str = None,
+    scale: float = 1.0,
+    greyscale: str = False,
+    tools: str | set[str] | bool = True,
+    logo: bool = False,
+    title_style: dict | None = None,
+    display: bool = False,
+) -> figure:
+    """
+    Plot an image.
 
-        if p.title is not None:
-            for k, v in title_style.items():
-                setattr(p.title, k, v)
+    Args:
+        image: Image to display.
+        title: The title for this image.
+        greyscale: Display the image in greyscale.
+        tools: Show one or more specific tools or hide the toolbox altogether.
+        logo: Show or hide the logo.
+        title_style: Title style.
+        display: Show the image instead of returning a Bokeh figure.
 
-        if not logo:
-            if len(tools) == 0:
-                p.toolbar_location = None
-            p.toolbar.logo = None
+    Returns:
+        A Bokeh figure.
+    """
 
-        return p
+    # Prepare the image
+    # ==================================================
+    if len(image.shape) == 3 and greyscale:
+        image = rgb2gray(image)
 
-    def image(
-        self,
-        image: np.ndarray,
-        title: str = None,
-        scale: float = 1.0,
-        greyscale: str = False,
-        tools: str | set[str] | bool = True,
-        logo: bool = False,
-        title_style: dict | None = None,
-    ) -> figure:
-        """
-        Plot an image.
+    if len(image.shape) == 2:
+        image = gray2rgb(image)
 
-        Args:
-            image (np.ndarray):
-                Image to display.
+    image = rescale_intensity(image, out_range=np.uint8)
+    if len(image.shape) == 3 and image.shape[-1] == 3:
+        image = np.dstack((image, np.full(image.shape[:2], 255, dtype=image.dtype)))
 
-            title (str, optional):
-                The title for this image. Defaults to None.
+    (h, w) = image.shape[:2]
 
-            greyscale (str, optional):
-                Display the image in greyscale. Defaults to False.
+    canvas = np.empty((h, w), dtype=np.uint32)
+    view = canvas.view(dtype=np.uint8).reshape((h, w, 4))
+    view[:] = image
 
-            tools (str | set[str] | bool, optional):
-                Show one or more specific tools or hide the toolbox altogether. Defaults to True.
+    # Prepare the figure
+    # ==================================================
+    p = make_figure(
+        h * scale + 30,
+        w * scale + 30,
+        title,
+        tools,
+        logo,
+        title_style,
+    )
 
-            logo (bool, optional):
-                Show or hide the logo. Defaults to False.
+    # Remove some visual elements that are not necessary
+    # for an image, such as the grid and the border.
+    p.x_range.range_padding = 0
+    p.y_range.range_padding = 0
+    p.toolbar.autohide = True
+    p.axis.visible = False
+    p.grid.visible = False
+    p.min_border = 2
+    p.margin = 1
 
-            title_style (dict | None, optional):
-                Title style. Defaults to None.
+    # Finally, plot the image.
+    # This method expects a list of images
+    # ==================================================
+    p.image_rgba(image=[canvas], x=0, y=0, dw=10, dh=10, origin="top_left")
 
-        Returns:
-            figure:
-                Returns a Bokeh figure.
-        """
+    if display:
+        return show_composite(p)
+    return p
 
-        # Prepare the image
-        # ==================================================
-        if len(image.shape) == 3 and greyscale:
-            image = rgb2gray(image)
 
-        if len(image.shape) == 2:
-            image = gray2rgb(image)
+def scatter(
+    ys: np.ndarray,
+    xs: np.ndarray = None,
+    height: int = 600,
+    width: int = 800,
+    title: str = None,
+    xtitle: str = None,
+    ytitle: str = None,
+    tools: str | set[str] | bool = True,
+    logo: bool = False,
+    title_style: dict | None = None,
+    display: bool = False,
+) -> figure:
+    """
+    Create a scatter plot.
 
-        image = rescale_intensity(image, out_range=np.uint8)
-        if len(image.shape) == 3:
-            image = np.dstack((image, np.full(image.shape[:2], 255, dtype=image.dtype)))
+    Args:
+        ys: Data to plot (Y axis).
+        xs: Data to plot (X axis).
+        height: Figure height.
+        width: Figure width.
+        title: The title for this image.
+        xtitle: The title for the x axis.
+        ytitle: The title for the y axis.
+        tools: Show one or more specific tools or hide the toolbox altogether.
+        logo: Show or hide the logo.
+        title_style: Title style.
+        display: Show the image instead of returning a Bokeh figure.
 
-        (h, w) = image.shape[:2]
+    Returns:
+        A Bokeh figure.
+    """
 
-        e = np.empty((h, w), dtype=np.uint32)
-        view = e.view(dtype=np.uint8).reshape((h, w, 4))
+    # Prepare the figure
+    # ==================================================
+    p = make_figure(
+        height,
+        width,
+        title=title,
+        tools=tools,
+        logo=logo,
+        title_style=title_style,
+    )
 
-        view[:] = image
+    p.toolbar.autohide = True
 
-        # Prepare the figure
-        # ==================================================
-        p = self._figure(
-            w * scale + 30,
-            h * scale + 30,
-            title,
-            tools,
-            logo,
-            title_style,
-        )
+    if xs is None:
+        xs = np.arange(len(ys))
 
-        # Remove some visual elements that are not necessary
-        # for an image, such as the grid and the border.
-        p.x_range.range_padding = 0
-        p.y_range.range_padding = 0
-        p.toolbar.autohide = True
-        p.axis.visible = False
-        p.grid.visible = False
-        p.min_border = 2
-        p.margin = 1
+    p.scatter(
+        xs,
+        ys,
+        color="#00ffff",
+        size=0.1,
+    )
 
-        # Finally, plot the image.
-        # This method expects a list of images
-        # ==================================================
-        p.image_rgba(image=[e], x=0, y=0, dw=10, dh=10, origin="top_left")
+    if xtitle is not None:
+        p.xaxis.axis_label = xtitle
 
-        return p
+    if ytitle is not None:
+        p.yaxis.axis_label = ytitle
 
-    def scatter(
-        self,
-        ys: np.ndarray,
-        xs: np.ndarray = None,
-        width: int = 640,
-        height: int = 480,
-        title: str = None,
-        xtitle: str = None,
-        ytitle: str = None,
-        tools: str | set[str] | bool = True,
-        logo: bool = False,
-        title_style: dict | None = None,
-    ) -> figure:
-        """
-        Create a scatter plot.
+    if display:
+        return show_composite(p)
+    return p
 
-        Args:
-            ys (np.ndarray):
-                Data to plot (Y axis).
 
-            xs (np.ndarray, optional):
-                Data to plot (X axis).
-                If unset, defaults to np.arange(len(ys)).
-                Defaults to None.
+def show_composite(
+    entries: figure | list[figure],
+    title: str | None = None,
+    title_style: dict | None = None,
+) -> CommsHandle | None:
+    """
+    Display a previously plotted entry.
 
-            width (int, optional):
-                Figure width. Defaults to 640.
-
-            height (int, optional):
-                Figure height. Defaults to 640.
-
-            title (str, optional):
-                The title for this image. Defaults to None.
-
-            xtitle (str, optional):
-                The title for the x axis. Defaults to None.
-
-            ytitle (str, optional):
-                The title for the y axis. Defaults to None.
-
-            tools (str | set[str] | bool, optional):
-                Show one or more specific tools or hide the toolbox altogether. Defaults to True.
-
-            logo (bool, optional):
-                Show or hide the logo. Defaults to False.
-
-            title_style (dict | None, optional):
-                Title style. Defaults to None.
-
-        Returns:
-            figure:
-                Returns a Bokeh figure.
-        """
-
-        # Prepare the figure
-        # ==================================================
-        p = self._figure(
-            width,
-            height,
-            title=title,
-            tools=tools,
-            logo=logo,
-            title_style=title_style,
-        )
-
-        p.toolbar.autohide = True
-
-        if xs is None:
-            xs = np.arange(len(ys))
-
-        p.scatter(
-            xs,
-            ys,
-            color="#00ffff",
-            size=0.1,
-        )
-
-        if xtitle is not None:
-            p.xaxis.axis_label = xtitle
-
-        if ytitle is not None:
-            p.yaxis.axis_label = ytitle
-
-        return p
-
-    def show(
-        self,
-        entries: figure | list[figure],
-        title: str | None = None,
-        title_style: dict | None = None,
-    ):
-        if title_style is None:
-            title_style = {
-                "font-size": "24px",
-                "text-align": "center",
+    Args:
+        entries: Entries to display.
+        title: Title to use for the whole plot.
+        title_style: Title style passed to the bokeh Div element.
+    """
+    if title_style is None:
+        title_style = {
+            "font-size": "24px",
+            "text-align": "center",
+            "width": "100%",
+        }
+    if title is not None:
+        title = Row(
+            Div(
+                text=title,
+                styles=title_style,
+            ),
+            styles={
                 "width": "100%",
-            }
-        if title is not None:
-            title = Row(
-                Div(
-                    text=title,
-                    styles=title_style,
-                ),
-                styles={
-                    "width": "100%",
-                },
-            )
+            },
+        )
 
-            entries = [title, [entries]]
+        entries = [title, [entries]]
 
-        if isinstance(entries, list):
-            entries = layout(children=entries)
+    if isinstance(entries, list):
+        entries = layout(children=entries)
 
-        show(entries)
+    show(entries)
