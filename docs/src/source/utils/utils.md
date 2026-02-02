@@ -12,7 +12,7 @@
     :autofunction:
 :::
 
-::: pyrception.utils.plot
+::: pyrception.utils.plotting
     :automodule:
     :autoclass:
     :autofunction:
