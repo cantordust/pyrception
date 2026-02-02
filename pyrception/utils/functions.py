@@ -1,12 +1,10 @@
 from pathlib import Path
-from datetime import datetime
-import threading
+from datetime import datetime, UTC
+from collections.abc import Iterable
+from matplotlib import colors
 
-import av
-from tqdm import tqdm
 import numpy as np
 from IPython import get_ipython
-import skimage as ski
 
 
 def mkdir(path: Path | str) -> Path:
@@ -15,12 +13,10 @@ def mkdir(path: Path | str) -> Path:
     return the resolved and expanded path.
 
     Args:
-        path:
-            A directory as a path or a string.
+        path: A directory as a path or a string.
 
     Returns:
-        Path:
-            The resolved and expanded path.
+        The resolved and expanded path.
     """
 
     path = Path(path)
@@ -28,42 +24,57 @@ def mkdir(path: Path | str) -> Path:
     return path.expanduser().resolve().absolute()
 
 
-def timestamp(ms: bool = False) -> tuple[str, str]:
+def timestamp(
+    ms: bool = False,
+    split: bool = False,
+) -> str | tuple[str, str]:
     """
     Create a datestamp and a timestamp as formatted strings.
 
     Args:
-        ms:
-            Use millisecond precision. Defaults to False.
+        ms: Use millisecond precision.
+        split: Split the string into date and time components.
 
     Returns:
-        A tuple containing:
-            1. The formatted date.
-            2. The formatted time.
+        The formatted date and time.
     """
 
     # Simplified ISO format (no timezone, etc.)
-    fmt = "%Y-%m-%d %H-%M-%S"
+    fmt = "%Y-%m-%d_%H-%M-%S"
     end = None
 
     if ms:
         # Use ms precision
-        fmt += ":%f"
+        fmt += "-%f"
         end = -3
 
     # Return (date, time).
     # UTC time is used to avoid ambiguity.
-    return datetime.strftime(datetime.now(datetime.UTC), fmt)[:end].split()
+    ts = datetime.strftime(datetime.now(UTC), fmt)[:end]
+    return ts.split("_") if split else ts
 
 
-def thread_id() -> int:
+def to_rgba(
+    colour: str | Iterable,
+) -> np.ndarray:
     """
-    Get the ID of the current thread.
+    Convert a colour specified as HEX into RGBA (a 4-tuple).
+
+    Args:
+        colour: The colour specified as a HEX string or an iterable.
 
     Returns:
-        The thread ID.
+        The RGBA values of the colour.
     """
-    return threading.get_ident()
+    if colour is not None:
+        if isinstance(colour, str):
+            colour = colors.to_rgba(colour)
+        colour = list(colour)
+        if len(colour) == 3:
+            colour.append(1.0)
+        colour = np.array(colour)
+
+    return colour
 
 
 def cartesian_prod(
@@ -74,118 +85,152 @@ def cartesian_prod(
     Compute the Cartesian product of two 1D arrays.
 
     Args:
-        arr1:
-            First array.
-
-        arr2:
-            Second array.
+        arr1: The first array.
+        arr2: The second array.
 
     Returns:
         The resulting Cartesian product.
     """
-    return np.transpose([np.repeat(arr1, len(arr2)), np.tile(arr2, len(arr1))])
+
+    mg = np.meshgrid(arr1, arr2, indexing="ij")
+    return np.concatenate(np.stack((mg[0], mg[1]), axis=2), axis=0)
 
 
-def load_image(
-    path: Path,
-    grayscale: bool = False,
-    scale: float = None,
+def arg2np(
+    arg: None | int | float | tuple | np.ndarray,
+    ext: int = 4,
+    pad: int = 0,
+    val: int = 0,
+    fill: bool = False,
+    bounds: tuple[int | float, ...] | None = None,
+    dtype: np.dtype = np.int32,
 ) -> np.ndarray:
     """
-    Load an image file.
+    Convert an argument into a NumPy array, assuming that we
+    want the values to apply to some 2D property, such as image
+    or kernel size, field of view, etc.
 
     Args:
-        path:
-            The path to the image.
+        arg: The argument.
+        ext: Extent of the returned array.
+        pad: Pad the array to the `pad` size.
+        val: Value to use to pad the array.
+        fill: If `True` and `arg` is a number, fill the array up to a size of
+            `ext` with the value of `arg`.
+        bounds: Upper and lower bounds to apply to the argument.
+        dtype: The dtype to use when converting to NumPy.
 
-        grayscale:
-            If True, the image will be converted to greyscale.
+    Raises:
+        AttributeError:
+            Raised if the parameter is a tuple with 3 or more than 4 elements.
 
-        scale:
-            Scale the image.
+        AttributeError:
+            Raised if the parameter is a NumPy array with 3 or more than 4 elements.
 
     Returns:
-        The image as a NumPy array.
+        The argument as a NumPy array.
     """
 
-    # Load the image
-    frame = ski.io.imread(path, as_gray=grayscale)
+    ext = np.clip(ext, 0, None)
+    pad = np.clip(pad, 0, None)
 
-    if scale is not None:
-        frame = ski.transform.rescale(
-            frame,
-            scale,
-            channel_axis=2 if not grayscale else None,
-        )
+    if bounds is not None:
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 2:
+            raise TypeError(
+                f"Invalid bounds: '{bounds}' (must be either None or a tuple of length 2)."
+            )
 
-    return np.expand_dims(ski.util.img_as_ubyte(frame), axis=0)
+    if arg is None:
+        arg = np.full((ext,), val)
+
+    elif isinstance(arg, (int, float)):
+        arg = np.full((ext,), arg) if fill else np.array([arg])
+
+    elif isinstance(arg, (tuple, list)):
+        arg = np.array(arg)
+
+    # At this point, only proceed if we have a NumPy array
+    if not isinstance(arg, np.ndarray):
+        raise TypeError(f"Invalid argument type: '{type(arg)}'")
+
+    arg = arg.astype(dtype)
+    if arg.size < pad:
+        arg = np.concatenate((arg, np.full((pad - arg.size,), val, dtype=dtype)))
+
+    if bounds is not None:
+        arg = np.clip(arg, a_min=bounds[0], a_max=bounds[1])
+
+    return arg[:ext]
 
 
-def load_video(
-    path: Path,
-    grayscale: bool = False,
-    scale: float = None,
-    probe: bool = False,
+def make_substrate(
+    height: int,
+    width: int,
+    step: int = 1,
 ) -> np.ndarray:
     """
-    Load a video file.
+    Create a Cartesian coordinate mesh with all possible combinations
+    of widths and heights (= columns and rows). These are the coordinates
+    of all the pixels in the raw input.
 
     Args:
-        path:
-            Path to the file.
-
-        grayscale:
-            If True, the image will be converted to greyscale.
-
-        scale:
-            Scale the video.
-
-        probe:
-            Only probe the video file for metadata.
-            To be deprecated.
+        height: Substrate height.
+        width: Substrate width.
+        step: Grid step (defines the coarseness of the mesh).
 
     Returns:
-        The video file as a NumPy array.
-
-        TODO: Lazy loading.
+        A substrate with the specified coarseness.
     """
 
-    av.logging.set_level(av.logging.VERBOSE)
-    container = av.open(path)
+    # A mesh of all possible coordinate pairs
+    rows = np.linspace(0, height - 1, height // step, dtype=np.int32)
+    cols = np.linspace(0, width - 1, width // step, dtype=np.int32)
+    return cartesian_prod(rows, cols)
 
-    v = container.streams.video[0]
-    w, h = v.width, v.height
 
-    frames = [None for _ in range(v.frames)]
+def crop_to_fov(
+    coordinates: np.ndarray,
+    size: np.ndarray,
+) -> tuple[np.ndarray, ...]:
+    """
+    Crop some substrate coordinates to the
+    dimensions of the visual field (the field of view, or FoV).
 
-    for index, frame in tqdm(
-        enumerate(container.decode(video=0)),
-        total=1 if probe else v.frames,
-        desc=f"Loading file {path.name}",
-    ):
-        if scale is not None:
-            frame = frame.reformat(width=int(w * scale), height=int(h * scale))
+    Args:
+        coordinates: Substrate coordinates (rows, cols).
+        size: The size of the FoV.
 
-        frame = frame.to_image()
+    Returns:
+        The FOV mask and the index array for the subset of
+        unique coordinates cropped to the visual field.
+    """
 
-        if grayscale:
-            frame = frame.convert("L")
+    coordinates = coordinates.astype(np.int32)
 
-        frames[index] = ski.util.img_as_ubyte(frame)
+    # Crop the coordinates to the FoV.
+    fov_mask = (
+        (coordinates[:, 0] >= 0)
+        & (coordinates[:, 0] < size[0])
+        & (coordinates[:, 1] >= 0)
+        & (coordinates[:, 1] < size[1])
+    )
 
-    frames = np.array(frames, dtype=np.ubyte)
-    return frames
+    cropped = coordinates[fov_mask]
+
+    # Indices of the unique coordinates.
+    unique_indices = np.unique(cropped, return_index=True, axis=0)[1]
+
+    return (cropped, fov_mask, unique_indices)
 
 
 def is_notebook() -> bool:
     """
     Determine if the caller is running in a Jupyter notebook.
 
-    Courtesy of https://stackoverflow.com/a/39662359/4639195.
+    Credit: https://stackoverflow.com/a/39662359/4639195.
 
     Returns:
-        bool:
-            True if running in a notebook.
+        bool: True if running in a notebook.
     """
     try:
         shell = get_ipython().__class__.__name__
@@ -193,9 +238,6 @@ def is_notebook() -> bool:
             case "ZMQInteractiveShell":
                 # Jupyter notebook or qtconsole
                 return True
-            case "TerminalInteractiveShell":
-                # Terminal running IPython
-                return False
             case _:
                 # Other type (?)
                 return False
