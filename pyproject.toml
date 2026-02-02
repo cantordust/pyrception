@@ -12,20 +12,16 @@ version = "0.2.5"
 requires-python = ">= 3.11"
 dependencies = [
     "av",
-    "black",
     "bokeh",
-    "h5py",
-    "imageio[ffmpeg]",
+    "environs",
     "ipykernel",
     "ipywidgets",
     "loguru",
     "matplotlib",
+    "moviepy",
     "numpy",
-    "opencv-python",
-    "plotly[express]",
-    "pydantic-settings",
-    "rich",
-    "ruff",
+    "omegaconf",
+    "platformdirs",
     "scikit-image",
     "scipy",
     "tqdm",
@@ -33,19 +29,19 @@ dependencies = [
 dynamic = ["readme"]
 
 [tool.setuptools.dynamic]
-readme = {file=["README.md"], content-type="text/markdown"}
+readme = { file = ["README.md"], content-type = "text/markdown" }
 
 [project.optional-dependencies]
 gui = ["pyqtgraph", "PySide6"]
 cli = ["cloup"]
 events = ["tonic"]
-dev = ["py-spy"]
+dev = ["black", "py-spy"]
 torch = ["torch"]
 docs = [
+    "mkdocs",
     "mike",
     "mkdocs-jupyter",
     "mkdocs-material",
-    "mkdocs",
     "mkdocstrings[python]",
 ]
 
@@ -54,7 +50,7 @@ pyrception = "pyrception.gui.main:run"
 
 [tool.ruff.format]
 indent-style = "space"
-skip-magic-trailing-comma = false
+skip-magic-trailing-comma = true
 line-ending = "auto"
 docstring-code-format = false
 docstring-code-line-length = "dynamic"
