@@ -173,6 +173,6 @@ cython_debug/
 # Custom
 **.png
 **.pdf
-/local
-/docs/site/
+docs/site/
+docs/src/notebooks/recordings
 **settings.toml

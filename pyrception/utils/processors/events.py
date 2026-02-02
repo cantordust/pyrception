@@ -2,8 +2,6 @@ import shutil
 from pathlib import Path
 import subprocess
 
-import cv2 as cv
-import h5py
 from tqdm import tqdm
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -108,16 +106,14 @@ class EventLoader:
         H5 converter.
 
         Args:
-            path (tp.Union[str, Path]):
+            path:
                 Path to the HDF5 file.
 
-            keys (tp.Optional[tp.Union[str, list[str]]], optional):
+            keys:
                 A key or a list of keys specifying the data.
-                Defaults to None.
 
         Raises:
-            ValueError:
-                Invalid path provided.
+            Invalid path provided.
         """
 
         self.events = events

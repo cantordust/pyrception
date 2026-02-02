@@ -2,12 +2,11 @@ from pathlib import Path
 
 import cv2 as cv
 import numpy as np
-import imageio.v3 as iio
 
 import typing as tp
 
+from pyrception import logger
 from pyrception import conf
-from pyrception.utils.logging import LoggingMixin
 from pyrception.visual.layers.bipolar import BipolarLayer
 from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.ganglion import GanglionLayer
@@ -15,7 +14,7 @@ from pyrception.visual.layers.receptor import ReceptorLayer
 from pyrception.visual.layers.horizontal import HorizontalLayer
 
 
-class Retina(LoggingMixin):
+class Retina:
     """
     A retinal layer aims to emulate the full processing pipeline
     of the mammalian retina, from receptors to ganglion cells.
@@ -57,7 +56,8 @@ class Retina(LoggingMixin):
         # Initialise the base
         super().__init__(name, *args, **kwargs)
 
-        self.info("Initialising...")
+        self.logger = logger.bind(source=f" | {'Retina':16s}")
+        self.logger.info("Initialising...")
 
         # Source parameters
         # ==================================================
@@ -104,11 +104,11 @@ class Retina(LoggingMixin):
             shape, self.bipolar, self.amacrine, **ganglion_args
         )
 
-        self.info("Initialised.")
+        self.logger.info("Initialised.")
 
         # TODO: Handle cases where we don't use OpenCV
         if source == 0:
-            self.info("Press ESC to quit.")
+            self.logger.info("Press ESC to quit.")
 
     def __del__(self):
         self.processing = False
@@ -211,8 +211,6 @@ class Retina(LoggingMixin):
                 ),
                 interpolation=cv.INTER_AREA,
             )
-
-        self.frame = self.frame.astype(conf.num)
 
         return self.frame
 
