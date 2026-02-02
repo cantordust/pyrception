@@ -174,4 +174,5 @@ cython_debug/
 **.png
 **.pdf
 docs/site/
+docs/src/notebooks/recordings
 **settings.toml
