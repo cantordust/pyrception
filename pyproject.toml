@@ -8,14 +8,11 @@ packages = ["pyrception"]
 [project]
 authors = [{ name = "Alexander Hadjiivanov" }]
 name = "pyrception"
-version = "0.3.2"
+version = "0.3.3"
 requires-python = ">= 3.11"
 dependencies = [
     "av",
     "bokeh",
-    "environs",
-    "ipykernel",
-    "ipywidgets",
     "loguru",
     "matplotlib",
     "moviepy",
@@ -31,18 +28,28 @@ dynamic = ["readme"]
 [tool.setuptools.dynamic]
 readme = { file = ["README.md"], content-type = "text/markdown" }
 
-[project.optional-dependencies]
-gui = ["pyqtgraph", "PySide6"]
+[dependency-groups]
 cli = ["cloup"]
-events = ["tonic"]
-dev = ["black", "py-spy"]
+events = ["faery", "event-camera-drivers"]
+dev = ["black", "py-spy", "pytest"]
 torch = ["torch"]
+ipy = ["ipykernel", "ipywidgets"]
 docs = [
     "mkdocs",
     "mike",
     "mkdocs-jupyter",
     "mkdocs-material",
     "mkdocstrings[python]",
+    { include-group = "ipy" },
+]
+all = [
+    { include-group = "cli" },
+    { include-group = "events" },
+    { include-group = "dev" },
+    { include-group = "torch" },
+    { include-group = "ipy" },
+    { include-group = "docs" },
+
 ]
 
 [project.scripts]
