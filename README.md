@@ -6,7 +6,7 @@ Pyrception is a simulation framework for biosensors. Currently, it provides the 
 
 <!-- ![Herd of zebra - multi-stage retinal processing]() -->
 <div align="center">
-    <video align="center" src="https://github.com/cantordust/pyrception/raw/refs/heads/dev/docs/src/notebooks/__temp__.mp4" type="video/mp4" controls preload autoplay muted loop width="800" ></video>
+    <video align="center" src="https://github.com/user-attachments/assets/faeea832-3832-48d0-8085-d71e62acc794" type="video/mp4" controls autoplay muted loop></video>
     <p align="center">An RGB video processed with different layers (see the full <a href="https://pyrception.readthedocs.io/en/latest/notebooks/video/">example</a>).</p>
 </div>
 
