@@ -5,7 +5,7 @@
 Pyrception is a simulation framework for biosensors. Currently, it provides the base ingredients for simulating key parts of the structural and functional elements of visual processing observed in the mammalian retina. The long-term goal of Pyrception is to support multiple sensory modalities (such as auditory, olfactory and tactile), and to provide methods for integrating those inputs into a unified multisensory input signal (such as spike trains). Alongside this, Pyrception can also serve as an input *conversion*  for encoding raw multimodal sensory input into a uniform spike train suitable for processing with spiking neural networks.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/cantordust/pyrception/dev/docs/src/notebooks/zebra.avif" />
+  <img src="https://raw.githubusercontent.com/cantordust/pyrception/dev/docs/src/notebooks/zebra_herd.avif" />
 </p>
 
 ## 🪛 Installation
