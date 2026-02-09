@@ -58,7 +58,6 @@ To generate and view the documentation locally, clone the repository and run the
 git clone git@github.com:cantordust/pyrception.git
 cd pyrception
 pip install -e . --group docs
-cd docs
 mkdocs build
 ```
 
