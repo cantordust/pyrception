@@ -1,7 +1,7 @@
 site_name: Pyrception
 repo_url: https://github.com/cantordust/pyrception
 site_dir: site
-docs_dir: src
+docs_dir: docs
 nav:
   - Overview: index.md
   - API:
@@ -68,9 +68,9 @@ plugins:
       ignore_h1_titles: true
       include_source: true
   - macros:
-        on_undefined: strict
-        include_dir: ../
-        render_by_default: true
+      on_undefined: strict
+      render_by_default: true
+      include_dir: "./"
 extra:
   version:
     provider: mike
