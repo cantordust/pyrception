@@ -67,6 +67,9 @@ plugins:
       execute: false
       ignore_h1_titles: true
       include_source: true
+  - macros:
+        on_undefined: strict
+        include_dir: ../
 extra:
   version:
     provider: mike
