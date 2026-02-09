@@ -70,6 +70,7 @@ plugins:
   - macros:
         on_undefined: strict
         include_dir: ../
+        render_by_default: true
 extra:
   version:
     provider: mike
