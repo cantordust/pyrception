@@ -9,6 +9,7 @@ Image processor
 
 RGB video processor
 -------------------
+
 ::: pyrception.utils.processors.video
     :automodule:
     :autoclass:
