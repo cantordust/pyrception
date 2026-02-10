@@ -1,4 +1,4 @@
-::: pyrception.visual.rf
+::: pyrception.utils.enums
     :automodule:
     :autoclass:
     :autofunction:

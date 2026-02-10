@@ -1,4 +1,5 @@
-::: pyrception.visual.rf
+::: pyrception.utils.functions
+
     :automodule:
     :autoclass:
     :autofunction:

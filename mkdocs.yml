@@ -18,9 +18,12 @@ nav:
               - Receptive fields: source/visual/rf.md
               - Retina: source/visual/retina.md
       - Utilities:
-          - Overview: source/utils/utils.md
+          - Functions: source/utils/functions.md
           - Mixins: source/utils/mixins.md
           - Processors: source/utils/processors.md
+          - Logging: source/utils/plotting.md
+          - Logging: source/utils/logging.md
+          - Enums: source/utils/enums.md
       - Configuration: source/config.md
   - Examples:
       - Image: notebooks/image.ipynb
@@ -41,7 +44,9 @@ theme:
       primary: blue grey
       accent: cyan
   features:
+    - navigation.instant
     - navigation.footer
+    - navigation.path
     - content.code.select
     - content.code.copy
     - content.tabs.link

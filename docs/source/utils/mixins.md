@@ -1,7 +1,4 @@
-# The `mixins` module
-
-::: pyrception.utils.mixins
+::: pyrception.utils.mixins.logging
     :automodule:
     :autoclass:
     :autofunction:
-:::

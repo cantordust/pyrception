@@ -1,7 +1,15 @@
-# The `processors` module
+Image processor
+---------------
 
-::: pyrception.utils.processors
+::: pyrception.utils.processors.image
     :automodule:
     :autoclass:
     :autofunction:
-:::
+
+
+RGB video processor
+-------------------
+::: pyrception.utils.processors.video
+    :automodule:
+    :autoclass:
+    :autofunction:
