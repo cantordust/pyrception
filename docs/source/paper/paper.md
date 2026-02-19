@@ -16,12 +16,13 @@ affiliations:
  - name: Advanced Concepts Team, European Space Agency
    index: 1
    ror: 03wd9za21
- - name: Adapsent
+ - name: Netherlands eScience Center
    index: 2
+   ror: 00rbjv475
  - name: Czech Technical University in Prague
    index: 3
    ror: 03kqpb082
-date: 9 Apr 2025
+date: 19 Feb 2026
 bibliography: references.bib
 ---
 
