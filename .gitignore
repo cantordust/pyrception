@@ -173,7 +173,4 @@ cython_debug/
 # Custom
 **.png
 **.pdf
-/docs/site
-!/docs/**/**.png
-!/docs/**/**.pdf
 **settings.toml

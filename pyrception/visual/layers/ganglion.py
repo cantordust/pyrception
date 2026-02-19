@@ -1,20 +1,17 @@
-# --------------------------------------
-import typing as tp
-
-# --------------------------------------
 import numpy as np
 
-# --------------------------------------
-import skimage as ski
+import typing as tp
 
-# --------------------------------------
-from pyrception.visual.layers.bipolar import BipolarLayer
-from pyrception.visual.layers.amacrine import AmacrineLayer
-from pyrception.visual.layers.base import BaseLayer
+from pyrception.utils import plot
+from bokeh.plotting import figure
 from pyrception.visual.rf import ReceptiveFields
+from pyrception.visual.layers.base import LayerBase
+from pathlib import Path
+from pyrception.utils.processors import VideoLoader
+from pyrception.utils.processors import VideoRecorder
 
 
-class GanglionLayer(BaseLayer):
+class GanglionLayer(LayerBase):
     """
     A layer of ganglion cells receiving excitatory input from
     bipolar cells and inhibitory input from amacrine cells.
@@ -22,88 +19,60 @@ class GanglionLayer(BaseLayer):
 
     def __init__(
         self,
-        shape: tuple[int, ...],
-        bipolar: BipolarLayer,
-        amacrine: AmacrineLayer,
-        sectors: int = 64,
-        name: str = "Ganglion",
-        inhibition_scale: float = 1,
-        bipolar_params: dict[str, tp.Any] = None,
-        amacrine_params: dict[str, tp.Any] = None,
-        tau: float | np.ndarray = 1.0,
-        threshold: float | np.ndarray = 0.5,
-        notifier: tp.Callable = None,
+        center: ReceptiveFields,
+        surround: ReceptiveFields,
+        tau: float = 5.0,
+        threshold: float = 1e-3,
+        inhibition_strength: float = 1.25,
+        *args,
+        **kwargs,
     ):
         """
-        _summary_
+        Ganglion layer with center-surround receptive fields.
 
         Args:
-            shape (tuple[int, ...]): _description_
-            bipolar (BipolarLayer): _description_
-            amacrine (AmacrineLayer): _description_
-            sectors (int, optional): _description_. Defaults to 64.
-            name (str, optional): _description_. Defaults to "Ganglion".
-            inhibition_scale (float, optional): _description_. Defaults to 2.
-            bipolar_params (dict[str, tp.Any], optional): _description_. Defaults to None.
-            amacrine_params (dict[str, tp.Any], optional): _description_. Defaults to None.
-            tau (float | np.ndarray, optional): _description_. Defaults to 1.0.
-            threshold (float | np.ndarray, optional): _description_. Defaults to 0.0.
-            notifier (tp.Callable, optional): _description_. Defaults to None.
+
+            center: The center receptive fields providing excitatory input to the ganglion cells.
+            surround: The surround receptive fields providing inhibitory input to the ganglion cells.
+            tau: Membrane time constant.
+            threshold: Spiking threshold.
+            inhibition_strength: Strength of the inhibitory signal relative to the excitatory one.
         """
 
         # Initialise the base
-        super().__init__(shape, name, notifier)
+        super().__init__(center.size, *args, **kwargs)
 
-        # Initialise the bipolar receptive fields.
-        # ==================================================
-        self.bipolar = bipolar
-        if bipolar_params is None:
-            bipolar_params = {}
-        bipolar_params.setdefault("name", f"{name} | Bipolar receptive fields")
-        bipolar_params["sectors"] = sectors
-        self.bipolar_rfs = ReceptiveFields(
-            self.shape,
-            bipolar.rfs.cell_coordinates,
-            notifier=notifier,
-            **bipolar_params,
-        )
-        self.bipolar_rfs.make_rfs()
-
-        # Initialise the amacrine receptive fields.
-        # ==================================================
-        self.amacrine = amacrine
-        if amacrine_params is None:
-            amacrine_params = {}
-        amacrine_params.setdefault("name", f"{name} | Amacrine receptive fields")
-        amacrine_params["sectors"] = sectors
-        self.amacrine_rfs = ReceptiveFields(
-            self.shape,
-            amacrine.rfs.cell_coordinates,
-            **amacrine_params,
-        )
-        self.amacrine_rfs.make_rfs()
-        self.inhibition_scale = inhibition_scale
+        self.center = center
+        self.surround = surround
 
         self.tau = tau
         self.tau_inv = 1 / tau
-        self.membrane = np.zeros((self.bipolar_rfs.neuron_count,))
-        self.spikes = np.zeros_like(self.membrane)
         self.threshold = threshold
+        self.inhibition_strength = inhibition_strength
+        self.membrane = np.zeros((self.center.cell_count,))
+        self.spikes = np.zeros_like(self.membrane)
+        self.logger.info("Initialised.")
 
-        self.info("Initialised.")
+    def _spike_frame(self):
+        self._canvas *= 0
+        self._canvas[
+            self.center.cell_coordinates[:, 0],
+            self.center.cell_coordinates[:, 1],
+        ] = self.spikes
+        return self._canvas
 
     def update_state(
         self,
         current: np.ndarray,
         dt: float | None = None,
     ):
-        self.membrane *= (
-            0.0 if dt is None else (self.tau_inv * np.exp(-self.tau_inv * dt))
-        )
+        self.membrane *= 0.0 if dt is None else np.exp(-self.tau_inv * dt)
         self.membrane += current
 
     def forward(
         self,
+        center: np.ndarray,
+        surround: np.ndarray,
         dt: float | None = None,
     ) -> np.ndarray:
         """
@@ -112,74 +81,61 @@ class GanglionLayer(BaseLayer):
         This is where spikes are produced.
 
         Args:
-
-            dt (float | None, optional):
-                In the case of temporal integration,
-                indicates the time since the last input.
-                Defaults to None.
+            center: Excitatory input to the center.
+            surround: Inhibitory input to the surround.
+            dt: Indicates the time since the last input in the case of temporal integration.
 
         Returns:
-            np.ndarray:
-                A spike array.
+            A spike array.
         """
 
         # ON centre / OFF surround
         current = self.convolve(
-            self.bipolar_rfs.forward_synapses,
-            self.bipolar.membrane,
-        ) - self.inhibition_scale * self.convolve(
-            self.amacrine_rfs.forward_synapses,
-            self.amacrine.membrane,
+            self.center.forward_synapses, center
+        ) - self.inhibition_strength * self.convolve(
+            self.surround.forward_synapses, surround
         )
 
         self.update_state(current, dt)
 
         self.spikes = np.where(self.membrane >= self.threshold, 1, 0)
 
+        for recorder in self._recorders.values():
+            recorder.update()
+
         return self.spikes
 
-    def plot_rfs(
-        self,
-        bipolar_rf_colour: str = "#ff00ff",
-        amacrine_rf_colour: str = "#ffff00",
-        *args,
-        **kwargs,
-    ) -> np.ndarray:
-        """
-        Plot the receptive fields of amacrine cells.
-        This takes into account the sparsity of bipolar cells.
+    def plot_activations(self, canvas: np.ndarray = None) -> np.ndarray:
 
-        Args:
-
-            bipolar_rf_colour (str, optional):
-                The colour to use for highlighting the plotted bipolar cells.
-
-            amacrine_rf_colour (str, optional):
-                The colour to use for highlighting the plotted amacrine cells.
-
-        Returns:
-            np.ndarray:
-                A plot of the receptive fields of the cells.
-
-        """
-
-        # Plot the bipolar cells
-        bl_canvas = self._plot_rfs(
-            self.bipolar_rfs,
-            rf_colour=bipolar_rf_colour,
-            *args,
-            **kwargs,
-        )
-
-        # Plot the amacrine cells
-        al_canvas = self._plot_rfs(
-            self.amacrine_rfs,
-            rf_colour=amacrine_rf_colour,
-            *args,
-            **kwargs,
-        )
-
-        canvas = bl_canvas + al_canvas
-        canvas /= canvas.max()
+        if canvas is None:
+            canvas = np.zeros((self.center.height, self.center.width))
+        canvas[:] *= 0.0
+        canvas[
+            self.center.cell_coordinates[:, 0],
+            self.center.cell_coordinates[:, 1],
+        ] = self.spikes
 
         return canvas
+
+    def visualise_spikes(self) -> figure:
+        """
+        Visualise the activations of amacrine cells.
+
+        Returns:
+            A Bokeh figure.
+        """
+        img = plot.image(self.plot_activations(), title="Ganglion layer | Spikes")
+        return plot.show_composite([[img]])
+
+    def record_spikes(
+        self,
+        fpath: Path,
+        vl: VideoLoader | None = None,
+    ) -> VideoRecorder:
+        return self.add_recorder(
+            "spikes",
+            fpath,
+            self._spike_frame,
+            self.center.size,
+            vl=vl,
+        )

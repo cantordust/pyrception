@@ -1,0 +1,95 @@
+site_name: Pyrception
+repo_url: https://github.com/cantordust/pyrception
+site_dir: site
+docs_dir: docs
+nav:
+  - Overview: index.md
+  - API:
+      - Modules:
+          - Visual:
+              - Layers:
+                  - Base: source/visual/layers/base.md
+                  - Receptor: source/visual/layers/receptor.md
+                  - Horizontal: source/visual/layers/horizontal.md
+                  - Bipolar: source/visual/layers/bipolar.md
+                  - Amacrine: source/visual/layers/amacrine.md
+                  - Ganglion: source/visual/layers/ganglion.md
+              - Kernel: source/visual/kernel.md
+              - Receptive fields: source/visual/rf.md
+              - Retina: source/visual/retina.md
+      - Utilities:
+          - Functions: source/utils/functions.md
+          - Mixins: source/utils/mixins.md
+          - Processors: source/utils/processors.md
+          - Logging: source/utils/plotting.md
+          - Logging: source/utils/logging.md
+          - Enums: source/utils/enums.md
+      - Configuration: source/config.md
+  - Examples:
+      - Image: notebooks/image.ipynb
+      - Video: notebooks/video.ipynb
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+      primary: blue grey
+      accent: cyan
+    - scheme: slate
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+      primary: blue grey
+      accent: cyan
+  features:
+    - navigation.instant
+    - navigation.footer
+    - navigation.path
+    - content.code.select
+    - content.code.copy
+    - content.tabs.link
+  font:
+    text: Roboto
+    code: Roboto Mono
+  locale: en
+  highlightjs: true
+  color_mode: auto
+  user_color_mode_toggle: true
+  nav_style: dark
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [..]
+          options:
+            show_source: false
+            group_by_category: false
+            relative_crossrefs: true
+  - mkdocs-jupyter:
+      execute: false
+      ignore_h1_titles: true
+      include_source: true
+  - macros:
+      on_undefined: strict
+      render_by_default: true
+      include_dir: "./"
+extra:
+  version:
+    provider: mike
+extra_css:
+  - stylesheets/extra.css
+markdown_extensions:
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - admonition

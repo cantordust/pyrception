@@ -1,30 +1,20 @@
-import typing as tp
-
-# --------------------------------------
 from pathlib import Path
 
-# --------------------------------------
+import cv2 as cv
 import numpy as np
 
-# --------------------------------------
-import imageio.v3 as iio
+import typing as tp
 
-# --------------------------------------
-import cv2 as cv
-
-# --------------------------------------
+from pyrception import logger
 from pyrception import conf
-from pyrception.utils.logging import LoggingMixin
-from pyrception.visual.utils.types import Dim
-from pyrception.visual.utils.types import Dims
-from pyrception.visual.layers.receptor import ReceptorLayer
-from pyrception.visual.layers.horizontal import HorizontalLayer
 from pyrception.visual.layers.bipolar import BipolarLayer
 from pyrception.visual.layers.amacrine import AmacrineLayer
 from pyrception.visual.layers.ganglion import GanglionLayer
+from pyrception.visual.layers.receptor import ReceptorLayer
+from pyrception.visual.layers.horizontal import HorizontalLayer
 
 
-class Retina(LoggingMixin):
+class Retina:
     """
     A retinal layer aims to emulate the full processing pipeline
     of the mammalian retina, from receptors to ganglion cells.
@@ -43,17 +33,17 @@ class Retina(LoggingMixin):
         Retina initialisation.
 
         Args:
-            source (str | int):
+            source:
                 Input source.
 
-            shape (tuple[int, ...]):
+            shape:
                 Dimensions of the visual field.
 
-            saccades (bool, optional):
-                Toggle for saccadic movements. Defaults to False.
+            saccades:
+                Toggle for saccadic movements.
 
-            name (str, optional):
-                Layer name. Defaults to "Retina".
+            name:
+                Layer name.
 
         Raises:
             ValueError:
@@ -66,7 +56,8 @@ class Retina(LoggingMixin):
         # Initialise the base
         super().__init__(name, *args, **kwargs)
 
-        self.info("Initialising...")
+        self.logger = logger.bind(source=f" | {'Retina':16s}")
+        self.logger.info("Initialising...")
 
         # Source parameters
         # ==================================================
@@ -113,11 +104,11 @@ class Retina(LoggingMixin):
             shape, self.bipolar, self.amacrine, **ganglion_args
         )
 
-        self.info("Initialised.")
+        self.logger.info("Initialised.")
 
         # TODO: Handle cases where we don't use OpenCV
         if source == 0:
-            self.info("Press ESC to quit.")
+            self.logger.info("Press ESC to quit.")
 
     def __del__(self):
         self.processing = False
@@ -125,7 +116,6 @@ class Retina(LoggingMixin):
         cv.destroyAllWindows()
 
     def _setup_source(self):
-
         if isinstance(self.source, str):
             self.src_path = Path(self.source).absolute()
 
@@ -137,7 +127,7 @@ class Retina(LoggingMixin):
                 self.reader = self._read_frame_file
 
             elif self.src_path.is_file():
-                self.debug(f"Using a video file as a source")
+                self.debug("Using a video file as a source")
 
                 # Source stream
                 self.stream = cv.VideoCapture(self.source)
@@ -158,8 +148,7 @@ class Retina(LoggingMixin):
         Iterate over a collection of image files.
 
         Yields:
-            np.ndarray:
-                Frame as a NumPy array.
+            Frame as a NumPy array.
         """
 
         for file in sorted(self.src_path.iterdir()):
@@ -171,10 +160,9 @@ class Retina(LoggingMixin):
         Read a frame from a video file.
 
         Returns:
-            tuple[bool, np.ndarray]:
-                A tuple containing:
-                    1. The processing indicator (if the file is still being read from)
-                    2. The frame as a NumPy array
+            A tuple containing:
+                1. The processing indicator (if the file is still being read from)
+                2. The frame as a NumPy array
         """
 
         try:
@@ -191,13 +179,12 @@ class Retina(LoggingMixin):
         probe: tp.Optional[bool] = False,
     ):
         """
-        _summary_
+        Retrieve a frame.
 
         Args:
-            probe (tp.Optional[bool], optional): _description_. Defaults to False.
-
-        Returns:
-            _type_: _description_
+            probe:
+                If True, only probe the source for metadata.
+                Likely obsolete, to be deprecated.
         """
 
         # Get the current frame
@@ -224,8 +211,6 @@ class Retina(LoggingMixin):
                 ),
                 interpolation=cv.INTER_AREA,
             )
-
-        self.frame = self.frame.astype(conf.num)
 
         return self.frame
 

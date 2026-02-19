@@ -8,23 +8,17 @@ packages = ["pyrception"]
 [project]
 authors = [{ name = "Alexander Hadjiivanov" }]
 name = "pyrception"
-version = "0.2.5"
+version = "0.3.4post2"
 requires-python = ">= 3.11"
 dependencies = [
     "av",
-    "black",
-    "h5py",
-    "imageio[ffmpeg]",
-    "ipykernel",
-    "ipywidgets",
+    "bokeh",
     "loguru",
     "matplotlib",
+    "moviepy",
     "numpy",
-    "opencv-python",
-    "plotly[express]",
-    "pydantic-settings",
-    "rich",
-    "ruff",
+    "omegaconf",
+    "platformdirs",
     "scikit-image",
     "scipy",
     "tqdm",
@@ -32,19 +26,31 @@ dependencies = [
 dynamic = ["readme"]
 
 [tool.setuptools.dynamic]
-readme = {file=["README.md"], content-type="text/markdown"}
+readme = { file = ["README.md"], content-type = "text/markdown" }
 
-[project.optional-dependencies]
-gui = ["pyqtgraph", "PySide6"]
+[dependency-groups]
 cli = ["cloup"]
-events = ["tonic"]
-dev = ["py-spy"]
+events = ["faery", "event-camera-drivers"]
+dev = ["black", "py-spy", "pytest"]
+torch = ["torch"]
+ipy = ["ipykernel", "ipywidgets"]
 docs = [
+    "mkdocs",
     "mike",
     "mkdocs-jupyter",
     "mkdocs-material",
-    "mkdocs",
     "mkdocstrings[python]",
+    "mkdocs-macros-plugin",
+    { include-group = "ipy" },
+]
+all = [
+    { include-group = "cli" },
+    { include-group = "events" },
+    { include-group = "dev" },
+    { include-group = "torch" },
+    { include-group = "ipy" },
+    { include-group = "docs" },
+
 ]
 
 [project.scripts]
@@ -52,7 +58,7 @@ pyrception = "pyrception.gui.main:run"
 
 [tool.ruff.format]
 indent-style = "space"
-skip-magic-trailing-comma = false
+skip-magic-trailing-comma = true
 line-ending = "auto"
 docstring-code-format = false
 docstring-code-line-length = "dynamic"
