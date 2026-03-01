@@ -77,7 +77,7 @@ You are expected to clearly disclose any use of AI in your contribution. Issue t
 
 At a minimum, this must describe:
 
-- Which parts of the code or documentation were AI-assisted
+- Which parts of the code or documentation were AI-assisted and
 - How AI was used (for example, ideation, drafting code, documentation or tests, spelling/grammar improvements, refactoring, bug discovery & security checks).
 
 #### Contribution guidelines still apply
