@@ -94,3 +94,7 @@ WIP.
 ### 🔧 Others
 - 🚧 Support alternative backends for sparse matrix operations ([CuPy](https://cupy.dev/), [PyTorch](https://pytorch.org/docs/stable/sparse.html), [Sparse](https://sparse.pydata.org/en/stable/)).
 - 🚧 Interfacing with (neuromorphic) hardware, such as event cameras.
+
+# Contributing to Pyrception
+
+Please read the [contribution guide](docs/contributing.md)
