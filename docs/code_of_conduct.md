@@ -1,0 +1,117 @@
+# Code of Conduct - Pyrception
+
+## Our pledge
+
+In the interest of fostering an open and welcoming environment, we as
+contributors and maintainers pledge to make participation in our project and
+our community a harassment-free experience for everyone, regardless of age, body
+size, disability, ethnicity, sex characteristics, gender identity and expression,
+sexual identity and orientation, level of experience, education, socio-economic status,
+nationality, personal appearance, race or religion.
+
+## Our standards
+
+Examples of behaviour that contributes to a positive environment for our
+community include:
+
+* Demonstrating empathy and kindness toward other people
+* Being respectful of differing opinions, viewpoints and experiences
+* Graceful provision and acceptance of constructive feedback
+* Accepting responsibility and apologising to those affected by our mistakes,
+  and learning from the experience
+* Focusing on what is best not just for us as individuals, but for the
+  overall community
+
+Examples of unacceptable behaviour include:
+
+* The use of sexualised language or imagery, sexual attention or advances
+* Trolling, insulting or derogatory comments and personal or political attacks
+* Public or private harassment
+* Condescending or mocking behaviour directed at people who are less knowledgeable
+  or experienced
+* Publishing others' private information, such as a physical or email
+  address, without their explicit permission
+* Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Our responsibilities
+
+Project maintainers are responsible for clarifying and enforcing our standards of
+acceptable behaviour and will take appropriate and fair corrective action in
+response to any behaviour that they deem inappropriate,
+threatening, offensive or harmful.
+
+Project maintainers have the right and responsibility to remove, edit, or reject
+comments, commits, code, wiki edits, issues, and other contributions that are
+not aligned to this Code of Conduct, and will communicate reasons for moderation
+decisions when appropriate.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+Examples of representing our community include using an official e-mail address,
+posting via an official social media account or acting as an appointed
+representative at an online or offline event.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behaviour may be
+reported to the maintainers of the project. All complaints will be reviewed
+and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Enforcement guidelines
+
+Community leaders will follow these Community Impact Guidelines in determining
+the consequences for any action they deem in violation of this Code of Conduct:
+
+### Correction
+
+**Community impact**: Use of inappropriate language or other behaviour deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from community leaders, providing
+clarity around the nature of the violation and an explanation of why the
+behaviour was inappropriate. A public apology may be requested.
+
+### Warning
+
+**Community impact**: A violation through a single incident or series
+of actions.
+
+**Consequence**: A warning with consequences for continued behaviour. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external channels
+like social media. Violating these terms may lead to a temporary or
+permanent ban.
+
+### Temporary ban
+
+**Community impact**: A serious violation of community standards, including
+sustained inappropriate behaviour.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public or
+private interaction with the people involved, including unsolicited interaction
+with those enforcing the Code of Conduct, is allowed during this period.
+Violating these terms may lead to a permanent ban.
+
+### Permanent ban
+
+**Community impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behaviour, harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within
+the community.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant](https://contributor-covenant.org/), version
+[1.4](https://www.contributor-covenant.org/version/1/4/code-of-conduct/code_of_conduct.md) and
+[2.0](https://www.contributor-covenant.org/version/2/0/code_of_conduct/code_of_conduct.md),
+and was generated by [contributing.md](https://contributing.md/generator).
