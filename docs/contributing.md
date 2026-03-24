@@ -9,7 +9,7 @@ If you like the project but just don't have time, energy or knowledge to contrib
 
 - Star the project
 - Make a post about it on social media
-- Refer this project in your project's README
+- Refer this project in your project's `readme.md`
 - Mention the project at local meetups and tell your friends/colleagues
 
 <!-- omit in toc -->

@@ -26,7 +26,7 @@ dependencies = [
 dynamic = ["readme"]
 
 [tool.setuptools.dynamic]
-readme = { file = ["README.md"], content-type = "text/markdown" }
+readme = { file = ["readme.md"], content-type = "text/markdown" }
 
 [dependency-groups]
 cli = ["cloup"]
