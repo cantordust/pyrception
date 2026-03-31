@@ -24,6 +24,17 @@ dependencies = [
     "tqdm",
 ]
 dynamic = ["readme"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 
 [tool.setuptools.dynamic]
 readme = { file = ["README.md"], content-type = "text/markdown" }
@@ -52,6 +63,12 @@ all = [
     { include-group = "docs" },
 
 ]
+
+[project.urls]
+Homepage = "https://pyrception.readthedocs.io/en/stable/"
+Documentation = "https://pyrception.readthedocs.io/en/stable/"
+Issues = "https://github.com/cantordust/pyrception/issues"
+Repository = "https://github.com/cantordust/pyrception"
 
 [project.scripts]
 pyrception = "pyrception.gui.main:run"
