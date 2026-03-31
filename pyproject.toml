@@ -10,6 +10,14 @@ authors = [{ name = "Alexander Hadjiivanov" }]
 name = "pyrception"
 version = "0.3.4post2"
 requires-python = ">= 3.11"
+description = "A biosensor simulation toolkit"
+keywords = [
+    "bioinspired vision",
+    "neuromorphic sensing",
+    "simulation",
+    "retina",
+    "neuroscience",
+]
 dependencies = [
     "av",
     "bokeh",
