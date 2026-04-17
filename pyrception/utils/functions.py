@@ -4,8 +4,7 @@ from collections.abc import Iterable
 from matplotlib import colors
 
 import numpy as np
-from IPython import get_ipython
-
+from pyrception.utils.logging import logger
 
 def mkdir(path: Path | str) -> Path:
     """
@@ -223,7 +222,7 @@ def crop_to_fov(
     return (cropped, fov_mask, unique_indices)
 
 
-def is_notebook() -> bool:
+def is_notebook() -> bool | None:
     """
     Determine if the caller is running in a Jupyter notebook.
 
@@ -232,15 +231,22 @@ def is_notebook() -> bool:
     Returns:
         bool: True if running in a notebook.
     """
+
     try:
-        shell = get_ipython().__class__.__name__
-        match shell:
-            case "ZMQInteractiveShell":
-                # Jupyter notebook or qtconsole
-                return True
-            case _:
-                # Other type (?)
-                return False
-    except NameError:
-        # Probably standard Python interpreter
-        return False
+        from IPython import get_ipython
+
+        try:
+            shell = get_ipython().__class__.__name__
+            match shell:
+                case "ZMQInteractiveShell":
+                    # Jupyter notebook or qtconsole
+                    return True
+                case _:
+                    # Other type (?)
+                    return False
+        except NameError:
+            # Probably standard Python interpreter
+            return False
+
+    except ModuleNotFoundError as e:
+        return
