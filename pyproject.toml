@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -8,9 +8,9 @@ packages = ["pyrception"]
 [project]
 authors = [{ name = "Alexander Hadjiivanov" }]
 name = "pyrception"
-version = "0.3.4post2"
+version = "0.3.4post3"
 requires-python = ">= 3.11"
-description = "A biosensor simulation toolkit"
+description = "A biosensor simulation toolkit."
 keywords = [
     "bioinspired vision",
     "neuromorphic sensing",
@@ -21,11 +21,11 @@ keywords = [
 dependencies = [
     "av",
     "bokeh",
+    "environs",
     "loguru",
     "matplotlib",
     "moviepy",
     "numpy",
-    "omegaconf",
     "platformdirs",
     "scikit-image",
     "scipy",
@@ -49,9 +49,7 @@ readme = { file = ["readme.md"], content-type = "text/markdown" }
 
 [dependency-groups]
 cli = ["cloup"]
-events = ["faery", "event-camera-drivers"]
 dev = ["black", "py-spy", "pytest"]
-torch = ["torch"]
 ipy = ["ipykernel", "ipywidgets"]
 docs = [
     "mkdocs",
@@ -64,12 +62,9 @@ docs = [
 ]
 all = [
     { include-group = "cli" },
-    { include-group = "events" },
     { include-group = "dev" },
-    { include-group = "torch" },
     { include-group = "ipy" },
     { include-group = "docs" },
-
 ]
 
 [project.urls]
@@ -77,9 +72,6 @@ Homepage = "https://pyrception.readthedocs.io/en/stable/"
 Documentation = "https://pyrception.readthedocs.io/en/stable/"
 Issues = "https://github.com/cantordust/pyrception/issues"
 Repository = "https://github.com/cantordust/pyrception"
-
-[project.scripts]
-pyrception = "pyrception.gui.main:run"
 
 [tool.ruff.format]
 indent-style = "space"
