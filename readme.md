@@ -97,4 +97,4 @@ WIP.
 
 # Contributing to Pyrception
 
-Please read the [contribution guide](docs/contributing.md)
+Please read the [contribution guide](https://github.com/cantordust/pyrception/blob/main/docs/contributing.md)
