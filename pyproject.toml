@@ -13,6 +13,8 @@ requires-python = ">= 3.11"
 dependencies = [
     "av",
     "bokeh",
+    "environs",
+    "ipython",
     "loguru",
     "matplotlib",
     "moviepy",
@@ -31,7 +33,7 @@ readme = { file = ["README.md"], content-type = "text/markdown" }
 [dependency-groups]
 cli = ["cloup"]
 events = ["faery", "event-camera-drivers"]
-dev = ["black", "py-spy", "pytest"]
+dev = ["black", "py-spy", "pytest", "pytest-cov"]
 torch = ["torch"]
 ipy = ["ipykernel", "ipywidgets"]
 docs = [
