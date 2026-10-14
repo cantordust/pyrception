@@ -1,34 +1,29 @@
-from tqdm import tqdm
-import numpy as np
-from scipy.sparse import csc_array
-from scipy.sparse import csr_array
+from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import Any
 
-from collections.abc import Iterable
-from collections.abc import Callable
+import numpy as np
 import skimage as ski
 from bokeh.plotting import figure
+from scipy.sparse import csc_array, csr_array
+from tqdm import tqdm
 
-from pyrception import conf
-from pyrception import logger
-from pyrception import utils
+from pyrception import conf, logger, utils
 from pyrception.utils import plot
+from pyrception.utils.enums import KernelFilter, KernelShape, RFArrangement
 from pyrception.utils.mixins import LoggingMixin
+from pyrception.utils.processors import VideoLoader, VideoRecorder
 from pyrception.visual.kernel import Kernel
-from pyrception.utils.enums import KernelShape
-from pyrception.utils.enums import KernelFilter
-from pyrception.utils.enums import RFArrangement
 
 
 class ReceptiveFields(LoggingMixin):
-
     def __init__(
         self,
         size: tuple[int, ...] | np.ndarray,
         sectors: int = 64,
         arrangement: RFArrangement | str = RFArrangement.LogPolar,
         phyllotactic: bool = False,
-        ksize: int | tuple[int, ...] | np.ndarray = None,
+        ksize: int | tuple[int, ...] | np.ndarray | None = None,
         kscale: tuple[int, ...] | np.ndarray | None = None,
         kbounds: tuple[int, ...] | np.ndarray | None = None,
         kangle: float = 0.0,
@@ -105,12 +100,7 @@ class ReceptiveFields(LoggingMixin):
         self.sectors = int(sectors)
         self.arrangement = RFArrangement(arrangement)
         self.phyllotactic = phyllotactic
-        self.ksize = utils.arg2np(
-            ksize or (3, 3),
-            ext=2,
-            fill=True,
-            bounds=(1, None),
-        )
+        self.ksize = utils.arg2np(ksize or (3, 3), ext=2, fill=True, bounds=(1, None))
         self.kscale = utils.arg2np(
             kscale or (1.0, 1.0),
             bounds=(0.05, None),
@@ -121,11 +111,7 @@ class ReceptiveFields(LoggingMixin):
             ext=2,
         )
         self.kbounds = utils.arg2np(
-            kbounds or (1, 1),
-            ext=4,
-            pad=4,
-            val=np.iinfo(np.int32).max,
-            fill=True,
+            kbounds or (1, 1), ext=4, pad=4, val=np.iinfo(np.int32).max, fill=True
         )
         self.kangle = float(kangle)
         self.kshape = KernelShape(kshape)
@@ -166,10 +152,7 @@ class ReceptiveFields(LoggingMixin):
         cls = self.__class__.__name__
         return f"{cls} | size: {self.size} | cell count: {self.cell_count})"
 
-    def _flatten(
-        self,
-        container: Iterable,
-    ) -> np.ndarray:
+    def _flatten(self, container: Iterable) -> np.ndarray:
         """
         Flatten a potentially nested (heterogeneous) array of elements.
 
@@ -301,14 +284,7 @@ class ReceptiveFields(LoggingMixin):
         kernel_sizes = 2 * kernel_sizes / (3 * q) + a
 
         kernel_sizes = np.clip(
-            self.kscale
-            * np.stack(
-                (
-                    kernel_sizes,
-                    kernel_sizes,
-                ),
-                axis=1,
-            ),
+            self.kscale * np.stack((kernel_sizes, kernel_sizes), axis=1),
             a_min=self.kbounds[:2],
             a_max=self.kbounds[2:4],
         )
@@ -349,10 +325,7 @@ class ReceptiveFields(LoggingMixin):
 
         return (cell_coords, kernel_sizes)
 
-    def _extract_segment_indices(
-        self,
-        container: Iterable,
-    ) -> list[np.ndarray]:
+    def _extract_segment_indices(self, container: Iterable) -> list[np.ndarray]:
         """
         Extract the indices of a specific segment.
         For now, this is limited to rings and sectors,
@@ -391,7 +364,7 @@ class ReceptiveFields(LoggingMixin):
         return segments
 
     def make_rfs(self, *args, **kwargs):
-        (cell_coords, kernel_sizes) = self._make_arrangement(*args, **kwargs)
+        cell_coords, kernel_sizes = self._make_arrangement(*args, **kwargs)
 
         unique_ksizes = np.unique(kernel_sizes, axis=0)
 
@@ -401,17 +374,9 @@ class ReceptiveFields(LoggingMixin):
         proto_k_weights = {}
         for ksize in unique_ksizes:
             key = tuple(ksize.tolist())
-            _coords, _outlines = Kernel.make_kernel(
-                self.kshape,
-                ksize,
-                self.kangle,
-            )
+            _coords, _outlines = Kernel.make_kernel(self.kshape, ksize, self.kangle)
             _weights = Kernel.make_filter(
-                self.kfilter,
-                _coords[0],
-                _coords[1],
-                angle=self.kangle,
-                **self.kparams,
+                self.kfilter, _coords[0], _coords[1], angle=self.kangle, **self.kparams
             )
             proto_k_coords[key] = _coords
             proto_k_outlines[key] = _outlines
@@ -432,14 +397,14 @@ class ReceptiveFields(LoggingMixin):
                 kernel_range, desc="Building kernels...", total=len(cell_coords)
             )
 
-        # The index map is a 2D array where the value of each
+        # The index map is a 2D array where the value for each
         # substrate cell is its index in the real substrate array.
         # By indexing the substrate below when creating a kernel,
         # it is possible to extract the sparse (row) indices for the
-        # kernel very efficiently.
-        substrate_idx = np.zeros(self.size, dtype=np.int32)
+        # kernels very efficiently.
+        substrate_idx = np.zeros(self.size, dtype=np.uint32)
         substrate_idx[self.substrate[:, 0], self.substrate[:, 1]] = np.arange(
-            1, len(self.substrate) + 1, dtype=np.int32
+            1, len(self.substrate) + 1, dtype=np.uint32
         )
         weight_idx = np.zeros(self.size)
 
@@ -523,16 +488,13 @@ class ReceptiveFields(LoggingMixin):
         # signal back to the input substrate.
         # ==================================================
         self.logger.debug("Creating feedback synapses.")
-        (unique, inverse, counts) = np.unique(
-            rf_coords,
-            return_inverse=True,
-            return_counts=True,
-            axis=0,
+        unique, inverse, counts = np.unique(
+            rf_coords, return_inverse=True, return_counts=True, axis=0
         )
         self.fb_counts = counts[inverse]
 
         # NOTE: Rows and columns are swapped here.
-        self.feedback_synapses = csc_array(
+        self.feedback_synapses = csr_array(
             (1 / self.fb_counts, (sp_cols, sp_rows)),
             shape=(len(self.substrate), self.cell_count),
             dtype=np.float32,
@@ -603,29 +565,20 @@ class ReceptiveFields(LoggingMixin):
 
             # Use logarithmic scaling for the counts, otherwise the intensity
             # fades too quickly away from the fovea.
-            kernel_colour = kernel_colour * np.log1p(self.fb_counts[offsets][:, None])
+            # kernel_colour = kernel_colour * np.log1p(self.fb_counts[offsets][:, None])
 
-            canvas[
-                rf_coords[:, 0],
-                rf_coords[:, 1],
-            ] = kernel_colour
+            canvas[rf_coords[:, 0], rf_coords[:, 1]] = kernel_colour
             canvas = ski.exposure.rescale_intensity(canvas, out_range=(0.0, 1.0))
 
         if cell_colour is not None:
             # Plot the cells last so that they are superimposed onto the receptive fields.
-            canvas[
-                centers[:, 0],
-                centers[:, 1],
-            ] = cell_colour
+            canvas[centers[:, 0], centers[:, 1]] = cell_colour
 
         if outline_colour is not None:
             # Potentially plot the outlines
             outlines = np.concatenate([k.outline for k in kernels], axis=0)
 
             # Plot the cells last so that they are superimposed onto the receptive fields.
-            canvas[
-                outlines[:, 0],
-                outlines[:, 1],
-            ] = outline_colour
+            canvas[outlines[:, 0], outlines[:, 1]] = outline_colour
 
         return plot.show_composite(plot.image(canvas), title=title)
