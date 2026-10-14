@@ -6,43 +6,33 @@ import skimage as ski
 from pyrception import utils
 from pyrception.utils.enums import KernelShape
 from pyrception.utils.enums import KernelFilter
+from dataclasses import dataclass
 
 
+@dataclass
 class Kernel:
 
-    def __init__(
-        self,
-        size: int | tuple[int, ...] | np.ndarray,
-        center: tuple[int, ...] | np.ndarray,
-        shape: KernelShape = KernelShape.Elliptic,
-        filter: KernelFilter = KernelFilter.Uniform,
-        angle: float = 0.0,
-        index: int | None = None,
-        coords: np.ndarray | None = None,
-        outline: np.ndarray | None = None,
-        weights: np.ndarray | None = None,
-        span: np.ndarray | None = None,
-        offset: np.ndarray | None = None,
-        name: str = "Kernel",
-        **params,
-    ):
+    size: tuple[int, ...] | np.ndarray
+    center: tuple[int, ...] | np.ndarray
+    shape: KernelShape = KernelShape.Elliptic
+    filter: KernelFilter = KernelFilter.Uniform
+    angle: float = 0.0
+    index: int | None = None
+    coords: np.ndarray | None = None
+    outline: np.ndarray | None = None
+    weights: np.ndarray | None = None
+    span: np.ndarray | None = None
+    offset: np.ndarray | None = None
+    name: str = "Kernel"
+    params: dict | None = None
 
-        if len(size) > 2 or any(s <= 0 for s in size):
-            raise AttributeError(f"Invalid size '{size}'")
+    def __post_init__(self):
 
-        self.size = utils.arg2np(size, dtype=np.int32, ext=2)
-        self.center = utils.arg2np(center, dtype=np.int32, ext=2)
-        self.shape = KernelShape(shape)
-        self.filter = KernelFilter(filter)
-        self.angle = float(angle)
-        self.index = index
-        self.coords = coords
-        self.outline = outline
-        self.weights = weights
-        self.span = span
-        self.offset = offset
-        self.name = name
-        self.params = params or {}
+        if len(self.size) > 2 or any(s <= 0 for s in self.size):
+            raise AttributeError(f"Invalid size '{self.size}'")
+
+        self.shape = KernelShape(self.shape)
+        self.filter = KernelFilter(self.filter)
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -58,14 +48,9 @@ class Kernel:
         Create a kernel with the requested shape and angle.
 
         Args:
-            kshape:
-                A KernelShape parameter.
-
-            size:
-                Kernel size (x and y extent).
-
-            angle:
-                Rotation angle.
+            kshape: A KernelShape parameter.
+            size: Kernel size (x and y extent).
+            angle: Rotation angle.
 
         Returns:
             The kernel and its outline, each as two separate arrays
@@ -193,6 +178,8 @@ class Kernel:
             rotation=angle,
         )
 
+        size += 1
+
         outline = ski.draw.ellipse_perimeter(
             0,
             0,
@@ -201,7 +188,7 @@ class Kernel:
             orientation=-angle,
         )
 
-        return coords, outline
+        return np.stack(coords, axis=1), np.stack(outline, axis=1)
 
     @staticmethod
     def make_rectangular_kernel(
@@ -252,7 +239,7 @@ class Kernel:
         coords = (rr - h // 2, cc - w // 2)
         outline = (rrp - h // 2, ccp - w // 2)
 
-        return coords, outline
+        return np.stack(coords, axis=1), np.stack(outline, axis=1)
 
     @staticmethod
     def make_uniform_filter(
@@ -315,7 +302,8 @@ class Kernel:
         # Normalise
         weights /= 2 * np.pi * (sd_y * sd_x)
 
-        return weights / weights.sum()
+        # return weights / weights.sum()
+        return weights
 
     @staticmethod
     def make_gabor_filter(

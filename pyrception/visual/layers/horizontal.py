@@ -31,53 +31,42 @@ class HorizontalLayer(LayerBase):
         self.feedback: np.ndarray | None = None
         self.logger.info("Initialised.")
 
-    def _activation_frame(self):
+    def activation_frame(self, canvas: np.ndarray) -> np.ndarray:
         """
         A frame showing the neuron activations.
 
         Returns:
             A frame as a NumPy array.
         """
-        canvas = np.zeros(self._size)
+        canvas[:] = 0
         canvas[
             self.excitatory.cell_coordinates[:, 0],
             self.excitatory.cell_coordinates[:, 1],
         ] = ski.exposure.rescale_intensity(self.activations, out_range=np.ubyte)
         return canvas
 
-    def _feedback_frame(self):
+    def feedback_frame(self, canvas: np.ndarray) -> np.ndarray:
         """
         A frame showing the feedback response.
 
         Returns:
             A frame as a NumPy array.
         """
-        return ski.exposure.rescale_intensity(
+        canvas[:] = ski.exposure.rescale_intensity(
             self.feedback.reshape(self.excitatory.size),
-            out_range=np.uint8,
+            out_range=np.ubyte,
         )
+        return canvas
 
-    def _norm_frame(self) -> np.ndarray:
+    def norm_frame(self, canvas: np.ndarray) -> np.ndarray:
         """
         Frame showing the normalised input (raw - feedback).
 
         Returns:
             A NumPy array.
         """
-        return (self.raw - self.feedback).reshape(self.excitatory.size[:2])
-        # ski.exposure.rescale_intensity(
-        #     (raw - feedback),
-        #     out_range=np.ubyte,
-        # )
-        # canvas = np.zeros(self._size)
-        # canvas[
-        #     self.excitatory.cell_coordinates[:, 0],
-        #     self.excitatory.cell_coordinates[:, 1],
-        # ] = self.membrane
-        # return ski.exposure.rescale_intensity(
-        #     canvas,
-        #     out_range=np.ubyte,
-        # )
+        canvas[:] = (self.raw - self.feedback).reshape(self.excitatory.size[:2])
+        return canvas
 
     def forward(
         self,
@@ -156,7 +145,7 @@ class HorizontalLayer(LayerBase):
 
     def record_activations(
         self,
-        fpath: Path,
+        fpath: str | Path = "./horizontal_activations.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
         """
@@ -169,17 +158,17 @@ class HorizontalLayer(LayerBase):
         Returns:
             A VideoRecorder instance.
         """
-        return self.add_recorder(
+        return self.record(
             "activations",
             fpath,
             self._activation_frame,
-            self.excitatory.size,
+            # size=self.excitatory.size,
             vl=vl,
         )
 
     def record_feedback(
         self,
-        fpath: Path,
+        fpath: str | Path = "./horizontal_feedback.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
         """
@@ -192,23 +181,23 @@ class HorizontalLayer(LayerBase):
         Returns:
             A VideoRecorder instance.
         """
-        return self.add_recorder(
+        return self.record(
             "feedback",
             fpath,
             self._feedback_frame,
-            self.excitatory.size,
+            # size=self.excitatory.size,
             vl=vl,
         )
 
     def record_norm(
         self,
-        fpath: Path,
+        fpath: str | Path = "./horizontal_norm.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "norm",
             fpath,
             self._norm_frame,
-            self.excitatory.size,
+            # size=self.excitatory.size,
             vl=vl,
         )

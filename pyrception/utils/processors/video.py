@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Any
 import av
 from pathlib import Path
 import numpy as np
@@ -14,110 +14,23 @@ from pyrception import utils
 from pyrception.utils import timestamp
 
 
-class VideoRecorder:
-
-    def __init__(
-        self,
-        fpath: str | Path,
-        height: int,
-        width: int,
-        function: Callable,
-        codec: str | None = None,
-        fps: int = 30,
-    ):
-        """
-        Create an animation from a buffer of stored activations.
-
-        Args:
-            fpath: Local file path.
-            height: Frame height.
-            width: Frame width.
-            function: Frame factory function.
-            codec: The codec to use.
-            fps: FPS for the output video.
-        """
-
-        ts = timestamp()
-
-        if fpath is None:
-            fpath = conf.paths.local / f"export-{ts}.mp4"
-
-        fpath = Path(fpath)
-
-        if fpath.exists():
-            if fpath.is_dir():
-                raise ValueError(
-                    f"The specified path is a directory. Please provide a valid file path."
-                )
-        else:
-            fpath.parent.mkdir(exist_ok=True, parents=True)
-
-        self.height = height
-        self.width = width
-        self.canvas = np.zeros((height, width))
-
-        # TODO:
-        # Add some logic to check if the value of the 'codec' parameter can be used.
-        self.codec = av.Codec(codec or "h264", "w").name
-        self.fps = fps
-        self.frame_function = function
-
-        self.container = av.open(fpath, mode="w")
-        self.stream = self.container.add_stream(self.codec, rate=fps)
-        self.stream.height = height
-        self.stream.width = width
-        self.stream.pix_fmt = "yuv420p"
-
-    @property
-    def size(self) -> tuple[int, int]:
-        """
-        Return the size of the frame.
-
-        Returns:
-            The size as a tuple (height, width)
-        """
-        return (self.height, self.width)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-
-        # Flush the container and close it.
-        packet = self.stream.encode(None)
-        self.container.mux(packet)
-        self.container.close()
-
-    def update(self):
-
-        frame = ski.exposure.rescale_intensity(
-            self.frame_function(), out_range=np.uint8
-        )
-        if len(frame.shape) == 2:
-            frame = ski.color.gray2rgb(frame)
-
-        out_frame = av.VideoFrame.from_ndarray(frame)
-        out_packet = self.stream.encode(out_frame)
-        self.container.mux(out_packet)
-
-
 class VideoLoader:
 
     def __init__(
         self,
-        path: str | Path,
+        vpath: str | Path,
         greyscale: bool = True,
         scale: float | None = None,
         height: int | None = None,
         width: int | None = None,
         fps: int = 30,
-        codec: str = "h264",
+        codec: str = "mpeg4",
     ):
         """
         A convenience class for loading video files or directories of images as frames.
 
         Args:
-            path: Save path.
+            vpath: Path to the video source.
             greyscale: Greyscale toggle
             scale: Scale of the frame.
             height: Frame height.
@@ -129,16 +42,17 @@ class VideoLoader:
             Raised if both the scale and ether the width or the height are specified.
         """
 
-        self.path = Path(path).resolve().absolute()
-        self.greyscale = greyscale
-        self.scale = scale
-        self.height = height
-        self.width = width
-        self.fps = fps
-        self.codec = codec
-        self.frame_count = 0
+        self._src_path = Path(vpath).resolve().absolute()
+        self._greyscale = greyscale
+        self._scale = scale
+        self._height = height
+        self._width = width
+        self._fps = fps
+        self._codec = codec
+        self._frame_count = 0
+        self._duration = 0.0
 
-        if all(p is not None for p in [self.scale, (self.width or self.height)]):
+        if all(p is not None for p in [self._scale, (self._width or self._height)]):
             raise AttributeError(
                 f"Please set *either* the new scale *or* the new width and/or height."
             )
@@ -155,24 +69,24 @@ class VideoLoader:
         Returns:
             The frame size as a tuple (height, width).
         """
-        return (self.height, self.width)
+        return (self._height, self._width)
 
     def __iter__(self):
         return self._iterator
 
     def __repr__(self):
-        return f"<{self.__class__.__qualname__} | {self.path.name} | {self.width}x{self.height}@{self.fps} fps | {self.frame_count} frames>"
+        return f"<{self.__class__.__qualname__} | {self._src_path.name} | {self._width}x{self._height}@{self._fps} fps | {self._frame_count} frames>"
 
     def _load(self):
         """
         Load a video file or an image sequence.
         """
 
-        if self.path.is_dir():
+        if self._src_path.is_dir():
             # Load a directory of frames.
             return self._load_frames()
 
-        elif self.path.is_file():
+        elif self._src_path.is_file():
             # Load an RGB video file.
             return self._load_video()
 
@@ -194,21 +108,21 @@ class VideoLoader:
             width: Original width.
         """
 
-        if all(p is None for p in [self.scale, self.width, self.height]):
+        if all(p is None for p in [self._scale, self._width, self._height]):
             return
 
-        if self.scale is not None:
-            self.height = int(height * self.scale)
-            self.width = int(width * self.scale)
+        if self._scale is not None:
+            self._height = int(height * self._scale)
+            self._width = int(width * self._scale)
 
         else:
             # Scale the height proportionally to the width
-            if self.width is not None and self.height is None:
-                self.height = int(height * self.width / width)
+            if self._width is not None and self._height is None:
+                self._height = int(height * self._width / width)
 
             # Scale the width proportionally to the height
-            if self.width is None and self.height is not None:
-                self.width = int(width * self.height / height)
+            if self._width is None and self._height is not None:
+                self._width = int(width * self._height / height)
 
     def _load_frames(self):
         """
@@ -220,11 +134,11 @@ class VideoLoader:
         fpaths = sorted(
             [
                 path
-                for path in self.path.glob("*.*")
+                for path in self._src_path.glob("*.*")
                 if path.suffix.lower() in image_extensions
             ]
         )
-        self.frame_count = len(fpaths)
+        self._frame_count = len(fpaths)
 
         # Get the original dimensions
         # and compute the scaled ones.
@@ -236,14 +150,14 @@ class VideoLoader:
 
         options = {}
         effects = []
-        if self.greyscale:
+        if self._greyscale:
             options["as_gray"] = True
 
         effects.append(partial(ski.io.imread, **options))
 
-        if self.scale is not None:
-            scale = [self.scale, self.scale]
-            if channels is not None and not self.greyscale:
+        if self._scale is not None:
+            scale = [self._scale, self._scale]
+            if channels is not None and not self._greyscale:
                 scale.append(1)
             effects.append(
                 partial(
@@ -253,14 +167,14 @@ class VideoLoader:
                 )
             )
 
-        elif self.width is not None or self.height is not None:
+        elif self._width is not None or self._height is not None:
             effects.append(
-                partial(ski.transform.resize, output_shape=(self.height, self.width))
+                partial(ski.transform.resize, output_shape=(self._height, self._width))
             )
 
         # Update the height and the width
-        self.height = self.height or height
-        self.width = self.width or width
+        self._height = self._height or height
+        self._width = self._width or width
 
         def _process(effects: list, frame: Path):
             for effect in effects:
@@ -274,31 +188,31 @@ class VideoLoader:
         Load a video clip.
         """
 
-        container = av.open(self.path)
+        container = av.open(self._src_path)
         video = container.streams.video[0]
 
-        self.fps = video.average_rate
+        self._fps = video.average_rate
         width = video.width
         height = video.height
         self._compute_dimensions(height, width)
 
-        self.codec = video.codec.name
-        self.fps = video.base_rate
-        self.frame_count = video.frames
-        self.duration = float(video.duration * video.time_base)
+        self._codec = video.codec.name
+        self._fps = video.base_rate
+        self._frame_count = video.frames
+        self._duration = float(video.duration * video.time_base)
 
         options = {}
-        if self.greyscale:
+        if self._greyscale:
             options["format"] = "gray"
 
-        if self.width is not None or self.height is not None:
-            options["width"] = self.width
-            options["height"] = self.height
+        if self._width is not None or self._height is not None:
+            options["width"] = self._width
+            options["height"] = self._height
             options["interpolation"] = av.video.reformatter.Interpolation.BICUBIC
 
         # Update the height and the width
-        self.height = self.height or height
-        self.width = self.width or width
+        self._height = self._height or height
+        self._width = self._width or width
 
         def _process(options: dict, frame: av.frame.Frame):
             return frame.to_rgb().to_ndarray(channel_last=True, **options)
@@ -313,5 +227,125 @@ class VideoLoader:
             A frame as a NumPy array.
         """
         return utils.plot.image(
-            iio.imread(f"{self.path}", index=index, plugin="pyav"), display=True
+            iio.imread(f"{self._src_path}", index=index, plugin="pyav"), display=True
         )
+
+
+class VideoRecorder:
+
+    def __init__(
+        self,
+        fpath: str | Path,
+        height: int,
+        width: int,
+        producer: Callable,
+        producer_opts: dict[str, Any] | Callable | None = None,
+        transformations: list[Callable] | None = None,
+        codec: str | None = None,
+        fps: int | None = None,
+        vl: VideoLoader | None = None,
+        name: str | None = None,
+    ):
+        """
+        Create an animation from a buffer of stored activations.
+
+        Args:
+            fpath: File path for the final video output.
+            height: Frame height.
+            width: Frame width.
+            producer: Frame producer (a callable taking a 2D NumPy array as an argument).
+            producer_opts: Optional dictionary providing keyword arguments for the producer.
+            transformations: A list of transformations to be applied to the canvas.
+            codec: The codec to use.
+            fps: FPS for the output video.
+            vl: An optional video loader that can be used to synchronise the codec and the FPS.
+            name: An optional name for this recorder.
+                If `None`, the one from the video loader will be used (which might also be `None`).
+        """
+
+        ts = timestamp()
+
+        if fpath is None:
+            fpath = conf.paths.local / f"export-{ts}.mp4"
+
+        fpath = Path(fpath)
+
+        if fpath.exists():
+            if fpath.is_dir():
+                raise ValueError(
+                    f"The specified path is a directory. Please provide a valid file path."
+                )
+        else:
+            fpath.parent.mkdir(exist_ok=True, parents=True)
+
+        self._height = height
+        self._width = width
+        self._canvas = np.zeros((height, width, 3))
+
+        # If a video loader is passed, synchronise the FPS and the codec.
+        self._fps = fps or (vl._fps if vl is not None else 30)
+
+        # TODO: Add some logic to check if the value of the 'codec' parameter can be used.
+        codec = codec or (vl._codec if vl is not None else "mpeg4")
+        self._codec = av.Codec(codec, "w")
+
+        self._producer = producer
+
+        # Producer options
+        if producer_opts is None:
+            producer_opts = {}
+
+        if isinstance(producer_opts, dict):
+            _opts = lambda: producer_opts
+
+        self._opts = _opts
+
+        self._transformations = [] if transformations is None else transformations
+
+        self._container = av.open(fpath, mode="w")
+        self._stream = self._container.add_stream(self._codec.name, rate=fps)
+        self._stream.height = height
+        self._stream.width = width
+
+        self._vl = vl
+        self._name = name
+
+    @property
+    def producer_opts(self) -> dict:
+        return self._opts()
+
+    @property
+    def size(self) -> tuple[int, int]:
+        """
+        Return the size of the frame.
+
+        Returns:
+            The size as a tuple (height, width)
+        """
+        return (self._height, self._width)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+
+        # Flush the container and close it.
+        packet = self._stream.encode(None)
+        self._container.mux(packet)
+        self._container.close()
+
+    def update(self):
+
+        canvas = self._producer(self._canvas, **self.producer_opts)
+
+        for t in self._transformations:
+            canvas = t(canvas)
+
+        canvas = ski.exposure.rescale_intensity(canvas, out_range=np.uint8)
+
+        if len(canvas.shape) == 2:
+            canvas = ski.color.gray2rgb(canvas)
+
+        frame = av.VideoFrame.from_ndarray(canvas)
+        packet = self._stream.encode(frame)
+        self._container.mux(packet)
