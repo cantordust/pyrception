@@ -19,12 +19,7 @@ keywords = [
     "neuroscience",
 ]
 dependencies = [
-    "av",
-    "bokeh",
-    "environs",
     "loguru",
-    "matplotlib",
-    "moviepy",
     "numpy",
     "platformdirs",
     "scikit-image",
@@ -50,7 +45,7 @@ readme = { file = ["readme.md"], content-type = "text/markdown" }
 [dependency-groups]
 cli = ["cloup"]
 dev = ["black", "py-spy", "pytest"]
-ipy = ["ipykernel", "ipywidgets"]
+ipython = ["ipykernel", "ipywidgets"]
 docs = [
     "mkdocs",
     "mike",
@@ -58,13 +53,17 @@ docs = [
     "mkdocs-material",
     "mkdocstrings[python]",
     "mkdocs-macros-plugin",
-    { include-group = "ipy" },
+    { include-group = "ipython" },
 ]
+plotting = ["bokeh", "matplotlib"]
+recording = ["av", "imageio[ffmpeg]", "moviepy", { include-group = "plot" }]
 all = [
     { include-group = "cli" },
     { include-group = "dev" },
-    { include-group = "ipy" },
+    { include-group = "ipython" },
     { include-group = "docs" },
+    { include-group = "plotting" },
+    { include-group = "recording" },
 ]
 
 [project.urls]
@@ -82,11 +81,11 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 from-first = false
-force-single-line = true
-force-sort-within-sections = true
-length-sort = true
+force-single-line = false
+force-sort-within-sections = false
+length-sort = false
 lines-after-imports = 1
-order-by-type = true
+order-by-type = false
 forced-separate = [
     "future",
     "typing",
