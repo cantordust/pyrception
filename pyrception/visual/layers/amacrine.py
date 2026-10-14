@@ -27,13 +27,13 @@ class AmacrineLayer(LayerBase):
 
         self.logger.info("Initialised.")
 
-    def _activation_frame(self):
-        self._canvas *= 0
-        self._canvas[
+    def activation_frame(self, canvas: np.ndarray):
+        canvas[:] = 0
+        canvas[
             self.excitatory.cell_coordinates[:, 0],
             self.excitatory.cell_coordinates[:, 1],
         ] = self.activations
-        return self._canvas
+        return canvas
 
     def forward(
         self,
@@ -65,13 +65,13 @@ class AmacrineLayer(LayerBase):
 
     def record_activations(
         self,
-        fpath: Path,
+        fpath: str | Path = "./amacrine_activations.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "activations",
             fpath,
-            self._activation_frame,
-            self.excitatory.size,
+            self.activation_frame,
+            # size=self.excitatory.size,
             vl=vl,
         )

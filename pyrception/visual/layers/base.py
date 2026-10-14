@@ -1,11 +1,13 @@
+from pathlib import Path
+import tempfile
+
 import numpy as np
-from typing import Callable
+
+from typing import Callable, Any
+
 from pyrception import logger
 from pyrception.utils.mixins import LoggingMixin
-from pathlib import Path
-from pyrception.utils.processors import VideoRecorder
-from pyrception.utils.processors import VideoLoader
-import tempfile
+from pyrception.utils.processors import VideoLoader, VideoRecorder
 
 
 class LayerBase(LoggingMixin):
@@ -24,17 +26,12 @@ class LayerBase(LoggingMixin):
         super().__init__(source, notifier, *args, **kwargs)
 
         self._size = size
-        self._canvas = np.zeros(self._size)
         self._recorders: dict[str, VideoRecorder] = {}
 
     def __call__(self, *args, **kwds):
         return self.forward(*args, **kwds)
 
-    def convolve(
-        self,
-        rf: np.ndarray,
-        signal: np.ndarray,
-    ) -> np.ndarray:
+    def convolve(self, rf: np.ndarray, signal: np.ndarray) -> np.ndarray:
         """
         Convolve the unrolled input vector with the current layer's receptive field.
 
@@ -73,11 +70,13 @@ class LayerBase(LoggingMixin):
         """
         pass
 
-    def add_recorder(
+    def record(
         self,
         name: str,
         fpath: str | Path,
-        function: Callable,
+        producer: Callable,
+        opts: dict[str, Any] | Callable | None = None,
+        transformations: list[Callable] | None = None,
         size: tuple[int, int] | np.ndarray | None = None,
         codec: str | None = None,
         fps: int | None = None,
@@ -89,7 +88,8 @@ class LayerBase(LoggingMixin):
         Args:
             name: Name of the recorder.
             fpath: File to save the recorded video output to.
-            function: A function producing frames.
+            producer: A function producing frames.
+            transformations: A list of transformations to be applied to the canvas.
             size: Size (height x width) of the frame.
             codec: The codec to use for the VideoRecorder.
             fps: The FPS to use for the VideoRecorder.
@@ -102,15 +102,17 @@ class LayerBase(LoggingMixin):
         if size is None:
             size = self._size
 
-        options = {}
-
-        # If the video loader is not None,
-        # synchronise the FPS and the codec.
-        fps = fps or (vl.fps if vl is not None else 30)
-        codec = codec or (vl.codec if vl is not None else "h264")
-        options["fps"] = fps
-        options["codec"] = codec
-
-        recorder = VideoRecorder(fpath, size[0], size[1], function, **options)
+        recorder = VideoRecorder(
+            fpath,
+            size[0],
+            size[1],
+            producer,
+            opts,
+            transformations,
+            codec,
+            fps,
+            vl,
+            name
+        )
         self._recorders[name] = recorder
         return recorder

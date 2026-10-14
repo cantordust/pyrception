@@ -53,13 +53,14 @@ class GanglionLayer(LayerBase):
         self.spikes = np.zeros_like(self.membrane)
         self.logger.info("Initialised.")
 
-    def _spike_frame(self):
-        self._canvas *= 0
-        self._canvas[
+    def spike_frame(self, canvas: np.ndarray):
+        canvas[:] = 0
+        canvas[
             self.center.cell_coordinates[:, 0],
             self.center.cell_coordinates[:, 1],
-        ] = self.spikes
-        return self._canvas
+            :,
+        ] = self.spikes[:, None]
+        return canvas
 
     def update_state(
         self,
@@ -109,7 +110,7 @@ class GanglionLayer(LayerBase):
 
         if canvas is None:
             canvas = np.zeros((self.center.height, self.center.width))
-        canvas[:] *= 0.0
+        canvas[:] = 0.0
         canvas[
             self.center.cell_coordinates[:, 0],
             self.center.cell_coordinates[:, 1],
@@ -129,13 +130,14 @@ class GanglionLayer(LayerBase):
 
     def record_spikes(
         self,
-        fpath: Path,
+        fpath: str | Path = "./spikes.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "spikes",
             fpath,
-            self._spike_frame,
-            self.center.size,
+            self.spike_frame,
+            # size=self.center.size,
+            codec="ffv1",
             vl=vl,
         )

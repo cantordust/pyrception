@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -8,32 +8,44 @@ packages = ["pyrception"]
 [project]
 authors = [{ name = "Alexander Hadjiivanov" }]
 name = "pyrception"
-version = "0.3.4post2"
+version = "0.3.5post1"
 requires-python = ">= 3.11"
+description = "A biosensor simulation toolkit."
+keywords = [
+    "bioinspired vision",
+    "neuromorphic sensing",
+    "simulation",
+    "retina",
+    "neuroscience",
+]
 dependencies = [
-    "av",
-    "bokeh",
     "loguru",
-    "matplotlib",
-    "moviepy",
     "numpy",
-    "omegaconf",
     "platformdirs",
     "scikit-image",
     "scipy",
     "tqdm",
 ]
 dynamic = ["readme"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 
 [tool.setuptools.dynamic]
 readme = { file = ["readme.md"], content-type = "text/markdown" }
 
 [dependency-groups]
 cli = ["cloup"]
-events = ["faery", "event-camera-drivers"]
 dev = ["black", "py-spy", "pytest"]
-torch = ["torch"]
-ipy = ["ipykernel", "ipywidgets"]
+ipython = ["ipykernel", "ipywidgets"]
 docs = [
     "mkdocs",
     "mike",
@@ -41,20 +53,24 @@ docs = [
     "mkdocs-material",
     "mkdocstrings[python]",
     "mkdocs-macros-plugin",
-    { include-group = "ipy" },
+    { include-group = "ipython" },
 ]
+plotting = ["bokeh", "matplotlib"]
+recording = ["av", "imageio[ffmpeg]", "moviepy", { include-group = "plot" }]
 all = [
     { include-group = "cli" },
-    { include-group = "events" },
     { include-group = "dev" },
-    { include-group = "torch" },
-    { include-group = "ipy" },
+    { include-group = "ipython" },
     { include-group = "docs" },
-
+    { include-group = "plotting" },
+    { include-group = "recording" },
 ]
 
-[project.scripts]
-pyrception = "pyrception.gui.main:run"
+[project.urls]
+Homepage = "https://pyrception.readthedocs.io/en/stable/"
+Documentation = "https://pyrception.readthedocs.io/en/stable/"
+Issues = "https://github.com/cantordust/pyrception/issues"
+Repository = "https://github.com/cantordust/pyrception"
 
 [tool.ruff.format]
 indent-style = "space"
@@ -65,11 +81,11 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 from-first = false
-force-single-line = true
-force-sort-within-sections = true
-length-sort = true
+force-single-line = false
+force-sort-within-sections = false
+length-sort = false
 lines-after-imports = 1
-order-by-type = true
+order-by-type = false
 forced-separate = [
     "future",
     "typing",

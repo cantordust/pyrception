@@ -1,10 +1,12 @@
 from pathlib import Path
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from collections.abc import Iterable
-from matplotlib import colors
 
 import numpy as np
-from IPython import get_ipython
+from matplotlib import colors
+from numpy.typing import NDArray, DTypeLike
+
+from pyrception.utils.logging import logger
 
 
 def mkdir(path: Path | str) -> Path:
@@ -24,10 +26,7 @@ def mkdir(path: Path | str) -> Path:
     return path.expanduser().resolve().absolute()
 
 
-def timestamp(
-    ms: bool = False,
-    split: bool = False,
-) -> str | tuple[str, str]:
+def timestamp(ms: bool = False, split: bool = False) -> str | list[str]:
     """
     Create a datestamp and a timestamp as formatted strings.
 
@@ -54,9 +53,7 @@ def timestamp(
     return ts.split("_") if split else ts
 
 
-def to_rgba(
-    colour: str | Iterable,
-) -> np.ndarray:
+def to_rgba(colour: str | Iterable) -> NDArray:
     """
     Convert a colour specified as HEX into RGBA (a 4-tuple).
 
@@ -77,10 +74,7 @@ def to_rgba(
     return colour
 
 
-def cartesian_prod(
-    arr1: np.ndarray,
-    arr2: np.ndarray,
-) -> np.ndarray:
+def cartesian_prod(arr1: np.ndarray, arr2: np.ndarray) -> NDArray:
     """
     Compute the Cartesian product of two 1D arrays.
 
@@ -102,9 +96,9 @@ def arg2np(
     pad: int = 0,
     val: int = 0,
     fill: bool = False,
-    bounds: tuple[int | float, ...] | None = None,
-    dtype: np.dtype = np.int32,
-) -> np.ndarray:
+    bounds: tuple[int | float | None, ...] | None = None,
+    dtype: DTypeLike = np.int32,
+) -> NDArray:
     """
     Convert an argument into a NumPy array, assuming that we
     want the values to apply to some 2D property, such as image
@@ -160,14 +154,10 @@ def arg2np(
     if bounds is not None:
         arg = np.clip(arg, a_min=bounds[0], a_max=bounds[1])
 
-    return arg[:ext]
+    return np.array(arg[:ext], dtype=dtype)
 
 
-def make_substrate(
-    height: int,
-    width: int,
-    step: int = 1,
-) -> np.ndarray:
+def make_substrate(height: int, width: int, step: int = 1) -> NDArray:
     """
     Create a Cartesian coordinate mesh with all possible combinations
     of widths and heights (= columns and rows). These are the coordinates
@@ -188,10 +178,7 @@ def make_substrate(
     return cartesian_prod(rows, cols)
 
 
-def crop_to_fov(
-    coordinates: np.ndarray,
-    size: np.ndarray,
-) -> tuple[np.ndarray, ...]:
+def crop_to_fov(coordinates: np.ndarray, size: np.ndarray) -> tuple[np.ndarray, ...]:
     """
     Crop some substrate coordinates to the
     dimensions of the visual field (the field of view, or FoV).
@@ -223,7 +210,7 @@ def crop_to_fov(
     return (cropped, fov_mask, unique_indices)
 
 
-def is_notebook() -> bool:
+def is_notebook() -> bool | None:
     """
     Determine if the caller is running in a Jupyter notebook.
 
@@ -232,15 +219,22 @@ def is_notebook() -> bool:
     Returns:
         bool: True if running in a notebook.
     """
+
     try:
-        shell = get_ipython().__class__.__name__
-        match shell:
-            case "ZMQInteractiveShell":
-                # Jupyter notebook or qtconsole
-                return True
-            case _:
-                # Other type (?)
-                return False
-    except NameError:
-        # Probably standard Python interpreter
-        return False
+        from IPython.core.getipython import get_ipython
+
+        try:
+            shell = get_ipython().__class__.__name__
+            match shell:
+                case "ZMQInteractiveShell":
+                    # Jupyter notebook or qtconsole
+                    return True
+                case _:
+                    # Other type (?)
+                    return False
+        except NameError:
+            # Probably standard Python interpreter
+            return False
+
+    except ModuleNotFoundError as e:
+        return

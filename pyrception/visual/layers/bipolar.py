@@ -5,8 +5,7 @@ from bokeh.plotting import figure
 import skimage as ski
 from pyrception.visual.rf import ReceptiveFields
 from pyrception.visual.layers.base import LayerBase
-from pyrception.utils.processors import VideoLoader
-from pyrception.utils.processors import VideoRecorder
+from pyrception.utils.processors import VideoLoader, VideoRecorder
 
 
 class BipolarLayer(LayerBase):
@@ -74,40 +73,42 @@ class BipolarLayer(LayerBase):
 
         return alpha
 
-    def _on_frame(self):
-        self._canvas *= 0
-        self._canvas[
+    def on_frame(self, canvas: np.ndarray):
+        canvas[:] = 0
+        canvas[
             self.excitatory.cell_coordinates[:, 0],
             self.excitatory.cell_coordinates[:, 1],
-        ] = self.on
-        return self._canvas
+            :,
+        ] = self.on[:, None]
+        return canvas
 
-    def _off_frame(self):
-        self._canvas *= 0
-        self._canvas[
+    def off_frame(self, canvas: np.ndarray):
+        canvas[:] = 0
+        canvas[
             self.excitatory.cell_coordinates[:, 0],
             self.excitatory.cell_coordinates[:, 1],
-        ] = self.off
-        return self._canvas
+            :,
+        ] = self.off[:, None]
+        return canvas
 
-    def _diff_frame(self):
-        self._canvas *= 0
-        self._canvas[
+    def diff_frame(self, canvas: np.ndarray):
+        canvas[:] = 0
+        canvas[
             self.excitatory.cell_coordinates[:, 0],
             self.excitatory.cell_coordinates[:, 1],
+            :,
         ] = (
             self.on - self.off
-        )
-        return self._canvas
+        )[:, None]
+        return canvas
 
-    def _on_off_frame(self):
+    def combined_frame(self, canvas: np.ndarray):
         """
         _summary_
 
         Returns:
             _description_
         """
-        canvas = np.zeros((*self._size, 3))
         canvas[
             self.excitatory.cell_coordinates[:, 0],
             self.excitatory.cell_coordinates[:, 1],
@@ -126,15 +127,15 @@ class BipolarLayer(LayerBase):
         )
         return canvas
 
-    def _ring_delog_canvas_on(self):
+    def ring_delog_on_frame(self, canvas: np.ndarray, max_ring_size: int):
         """
         _summary_
 
         Returns:
             _description_
         """
-        max_ring_size = np.max([ring.size for ring in self.excitatory.cell_rings])
-        ring_array = np.zeros((len(self.excitatory.cell_rings), max_ring_size))
+
+        canvas[:] = 0
         for r in range(len(self.excitatory.cell_rings)):
             left_arc = self.excitatory.cell_rings[r][
                 len(self.excitatory.cell_rings[r])
@@ -151,30 +152,35 @@ class BipolarLayer(LayerBase):
                     ],
                 )
             )
-            ring_array[r, max_ring_size // 2 - len(left_arc) : max_ring_size // 2] = (
-                self.on[left_arc]
-            )
-            ring_array[r, max_ring_size // 2 : max_ring_size // 2 + len(right_arc)] = (
-                self.on[right_arc]
-            )
+            canvas[
+                r,
+                max_ring_size // 2 - len(left_arc) : max_ring_size // 2,
+                :,
+            ] = self.on[left_arc][:, None]
+            canvas[
+                r,
+                max_ring_size // 2 : max_ring_size // 2 + len(right_arc),
+                :,
+            ] = self.on[right_arc][:, None]
 
-        return ring_array
+        return canvas
 
-    def _sector_delog_canvas_on(self):
+    def sector_delog_on_frame(self, canvas: np.ndarray):
         """
         _summary_
 
         Returns:
             _description_
         """
-        max_sector_size = np.max([ring.size for ring in self.excitatory.cell_rings])
-        sector_array = np.zeros((len(self.excitatory.cell_sectors), max_sector_size))
+        canvas[:] = 0
         for s in range(len(self.excitatory.cell_sectors)):
-            sector_array[s, : len(self.excitatory.cell_sectors[s])] = self.on[
-                self.excitatory.cell_sectors[s]
-            ]
+            canvas[
+                s,
+                : len(self.excitatory.cell_sectors[s]),
+                :,
+            ] = self.on[self.excitatory.cell_sectors[s]][:, None]
 
-        return sector_array
+        return canvas
 
     def forward(
         self,
@@ -257,84 +263,85 @@ class BipolarLayer(LayerBase):
 
     def record_on(
         self,
-        fpath: Path,
+        fpath: str | Path = "./bipolar_on.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "on",
             fpath,
             self._on_frame,
-            self.excitatory.size,
             vl=vl,
         )
 
     def record_off(
         self,
-        fpath: Path,
+        fpath: str | Path = "./bipolar_off.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "off",
             fpath,
-            self._off_frame,
-            self.excitatory.size,
+            self.off_frame,
             vl=vl,
         )
 
-    def record_on_off(
+    def record_combined(
         self,
-        fpath: Path,
+        fpath: str | Path = "./bipolar_combined.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "on_off",
             fpath,
-            self._on_off_frame,
-            self.excitatory.size,
+            self.combined_frame,
             vl=vl,
         )
 
     def record_diff(
         self,
-        fpath: Path,
+        fpath: str | Path = "./bipolar_diff.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
-        return self.add_recorder(
+        return self.record(
             "diff",
             fpath,
-            self._diff_frame,
-            self.excitatory.size,
+            self.diff_frame,
             vl=vl,
         )
 
     def record_ring_delog_on(
         self,
-        fpath: Path,
+        fpath: str | Path = "./bipolar_ring_delog_on.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
 
         max_ring_size = np.max([ring.size for ring in self.excitatory.cell_rings])
-        ring_array = np.zeros((len(self.excitatory.cell_rings), max_ring_size))
-        return self.add_recorder(
+        return self.record(
             "ring_delog_on",
             fpath,
-            self._ring_delog_canvas_on,
-            ring_array.shape,
+            self.ring_delog_on_frame,
+            opts={
+                "max_ring_size": np.max(
+                    [ring.size for ring in self.excitatory.cell_rings]
+                )
+            },
+            size=(len(self.excitatory.cell_rings), max_ring_size),
+            codec="ffv1",
             vl=vl,
         )
 
     def record_sector_delog_on(
         self,
-        fpath: Path,
+        fpath: str | Path = "./bipolar_sector_delog_on.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
 
-        max_sector_size = np.max([ring.size for ring in self.excitatory.cell_rings])
-        sector_array = np.zeros((len(self.excitatory.cell_rings), max_sector_size))
-        return self.add_recorder(
+        max_sector_size = np.max([sector.size for sector in self.excitatory.cell_sectors])
+        return self.record(
             "sector_delog_on",
             fpath,
-            self._sector_delog_canvas_on,
-            sector_array.shape,
+            self.sector_delog_on_frame,
+            size=(len(self.excitatory.cell_sectors), max_sector_size),
+            codec="ffv1",
             vl=vl,
         )

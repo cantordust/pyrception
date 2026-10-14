@@ -79,11 +79,11 @@ class ReceptorLayer(LayerBase):
 
     def record_raw(
         self,
-        fpath: str | Path | None = None,
+        fpath: str | Path = "./raw_input.mp4",
         vl: VideoLoader | None = None,
     ) -> VideoRecorder:
         '''
-        Add a recorder to the layer.
+        Record the raw input.
 
         Args:
             fpath: Optional path to save the recording to.
@@ -93,10 +93,9 @@ class ReceptorLayer(LayerBase):
             A VideoRecorder instance.
         '''
 
-        return self.add_recorder(
+        return self.record(
             "raw",
             fpath,
             lambda: self.frame,
-            self.size,
             vl=vl,
         )
