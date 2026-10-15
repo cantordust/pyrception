@@ -220,21 +220,35 @@ def is_notebook() -> bool | None:
         bool: True if running in a notebook.
     """
 
-    try:
-        from IPython.core.getipython import get_ipython
-
+    def _is_marimo_nb() -> bool:
+        """
+        Check if we are running inside a Marimo notebook.
+        """
         try:
-            shell = get_ipython().__class__.__name__
-            match shell:
-                case "ZMQInteractiveShell":
-                    # Jupyter notebook or qtconsole
-                    return True
-                case _:
-                    # Other type (?)
-                    return False
-        except NameError:
-            # Probably standard Python interpreter
+            import marimo as mo
+
+            return mo.running_in_notebook()
+        except ModuleNotFoundError as e:
             return False
 
-    except ModuleNotFoundError as e:
-        return
+    def _is_jupyter_nb() -> bool:
+        """
+        Check if we are running inside a Jupyter notebook.
+        """
+        try:
+            from IPython.core.getipython import get_ipython
+
+            try:
+                shell = get_ipython().__class__.__name__
+                match shell:
+                    case "ZMQInteractiveShell":
+                        return True
+                    case _:
+                        return False
+            except NameError:
+                return False
+
+        except ModuleNotFoundError as e:
+            return False
+
+    return _is_jupyter_nb() or _is_marimo_nb()

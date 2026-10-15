@@ -46,6 +46,7 @@ readme = { file = ["readme.md"], content-type = "text/markdown" }
 cli = ["cloup"]
 dev = ["black", "py-spy", "pytest"]
 ipython = ["ipykernel", "ipywidgets"]
+marimo = ["marimo[recommended]"]
 docs = [
     "mkdocs",
     "mike",
@@ -54,13 +55,15 @@ docs = [
     "mkdocstrings[python]",
     "mkdocs-macros-plugin",
     { include-group = "ipython" },
+    { include-group = "marimo" },
 ]
 plotting = ["bokeh", "matplotlib"]
-recording = ["av", "imageio[ffmpeg]", "moviepy", { include-group = "plot" }]
+recording = ["av", "imageio[ffmpeg]", "moviepy", { include-group = "plotting" }]
 all = [
     { include-group = "cli" },
     { include-group = "dev" },
     { include-group = "ipython" },
+    { include-group = "marimo" },
     { include-group = "docs" },
     { include-group = "plotting" },
     { include-group = "recording" },
